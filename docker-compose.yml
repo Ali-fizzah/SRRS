@@ -23,8 +23,10 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     environment: &backend-env
       REVREC_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-revrec}:${POSTGRES_PASSWORD:-revrec}@postgres:5432/${POSTGRES_DB:-revrec}
-      REVREC_JWT_SECRET: ${REVREC_JWT_SECRET:-change-me-in-production}
+      REVREC_JWT_SECRET: ${REVREC_JWT_SECRET:-dev-only-insecure-jwt-secret-change-me-0001}
       REVREC_UPLOAD_DIR: /app/storage/uploads
+      REVREC_ADMIN_EMAIL: ${REVREC_ADMIN_EMAIL:-admin@revrec.local}
+      REVREC_ADMIN_PASSWORD: ${REVREC_ADMIN_PASSWORD:-ChangeMe-Admin1}
     ports:
       - "8000:8000"
     volumes:

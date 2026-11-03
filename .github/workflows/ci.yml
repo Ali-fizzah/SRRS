@@ -32,7 +32,7 @@ jobs:
           --health-retries 10
     env:
       REVREC_DATABASE_URL: postgresql+psycopg://revrec:revrec@localhost:5432/revrec
-      REVREC_JWT_SECRET: ci-only-secret
+      REVREC_JWT_SECRET: ci-only-jwt-secret-at-least-32-characters
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6

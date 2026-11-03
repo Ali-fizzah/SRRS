@@ -24,10 +24,11 @@ import Toolbar from "@mui/material/Toolbar";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { NAV } from "@/components/routes";
+import { fetchMe, type SessionUser, signOut } from "@/lib/session";
 
 const DRAWER_WIDTH = 248;
 
@@ -76,8 +77,22 @@ function NavList({ onNavigate }: { onNavigate: () => void }) {
 /** App layout: top bar + navigation drawer (permanent on desktop, toggled on tablet). */
 export default function AppShell({ children }: { children: ReactNode }) {
   const theme = useTheme();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const paper = { "& .MuiDrawer-paper": { width: DRAWER_WIDTH, boxSizing: "border-box" } };
+
+  // Signed-out visitors go to /login. The API still checks roles on every request.
+  useEffect(() => {
+    fetchMe()
+      .then((me) => (me ? setUser(me) : router.replace("/login")))
+      .catch(() => router.replace("/login"));
+  }, [router]);
+
+  async function handleSignOut() {
+    await signOut();
+    router.replace("/login");
+  }
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
@@ -95,8 +110,18 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }} noWrap>
             Revenue Recognition
           </Typography>
+          {user && (
+            <Box sx={{ textAlign: "right", mr: 1, display: { xs: "none", sm: "block" } }}>
+              <Typography variant="body2" noWrap>
+                {user.full_name}
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.8 }} noWrap>
+                {user.roles.join(" · ")}
+              </Typography>
+            </Box>
+          )}
           <Tooltip title="Sign out">
-            <IconButton color="inherit" component={Link} href="/login" aria-label="Sign out">
+            <IconButton color="inherit" onClick={handleSignOut} aria-label="Sign out">
               <LogoutIcon />
             </IconButton>
           </Tooltip>

@@ -1,5 +1,6 @@
 "use client";
 
+import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
@@ -8,15 +9,29 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useRouter } from "next/navigation";
-import type { FormEvent } from "react";
+import { type FormEvent, useState } from "react";
 
-/** Login stub (P0-T6). Real sign-in with the JWT cookie arrives in P1-T3. */
+import { ApiError, signIn } from "@/lib/session";
+
+/** Sign in (plan §9 /login). On success the API sets the session cookie (D11). */
 export default function LoginPage() {
   const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    router.push("/");
+    setBusy(true);
+    setError(null);
+    try {
+      await signIn(email, password);
+      router.replace("/");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not reach the server. Try again.");
+      setBusy(false);
+    }
   }
 
   return (
@@ -37,25 +52,38 @@ export default function LoginPage() {
           <Typography color="text.secondary" sx={{ mb: 3 }}>
             Revenue Recognition System
           </Typography>
-          <Stack component="form" spacing={2} onSubmit={handleSubmit}>
+          <Stack component="form" spacing={2} onSubmit={handleSubmit} noValidate>
+            {error && <Alert severity="error">{error}</Alert>}
             <TextField
+              id="email"
               label="Email"
               type="email"
               name="email"
               autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
               fullWidth
+              autoFocus
             />
             <TextField
+              id="password"
               label="Password"
               type="password"
               name="password"
               autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
               fullWidth
             />
-            <Button type="submit" variant="contained" size="large">
-              Sign in
+            <Button
+              type="submit"
+              variant="contained"
+              size="large"
+              disabled={busy || !email || !password}
+            >
+              {busy ? "Signing in…" : "Sign in"}
             </Button>
           </Stack>
         </CardContent>

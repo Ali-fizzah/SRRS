@@ -11,10 +11,18 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import Connection, Engine, create_engine, text
+from fastapi.testclient import TestClient
+from sqlalchemy import Connection, Engine, create_engine, select, text
 from sqlalchemy.engine import URL, make_url
+from sqlalchemy.orm import Session
 
+from app.auth.roles import Role
+from app.auth.tokens import create_access_token
 from app.config import get_settings
+from app.db.session import get_db
+from app.main import app
+from app.models import Role as RoleRow
+from app.models import User, UserRole
 
 BACKEND = Path(__file__).resolve().parents[2]
 
@@ -66,3 +74,55 @@ def conn(migrated_engine: Engine) -> Iterator[Connection]:
         transaction = connection.begin()
         yield connection
         transaction.rollback()
+
+
+@pytest.fixture
+def db(conn: Connection) -> Iterator[Session]:
+    """ORM session inside the test transaction; its commits become savepoints."""
+    with Session(bind=conn, join_transaction_mode="create_savepoint") as session:
+        yield session
+
+
+@pytest.fixture
+def client(db: Session) -> Iterator[TestClient]:
+    """API client whose requests use the test transaction."""
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+
+
+def make_user(
+    db: Session,
+    roles: list[Role],
+    *,
+    email: str | None = None,
+    password_hash: str = "not-a-real-hash",
+    is_active: bool = True,
+) -> User:
+    user = User(
+        email=email or f"{'-'.join(r.lower() for r in roles) or 'norole'}@test.local",
+        full_name="Test User",
+        password_hash=password_hash,
+        is_active=is_active,
+    )
+    db.add(user)
+    db.flush()
+    role_ids = dict(db.execute(select(RoleRow.name, RoleRow.id)).tuples().all())
+    for role in roles:
+        db.add(UserRole(user_id=user.id, role_id=role_ids[role.value]))
+    db.flush()
+    return user
+
+
+def use_token(client: TestClient, token: str | None) -> None:
+    """Make `client` send this session cookie (None = signed out)."""
+    client.cookies.clear()
+    if token is not None:
+        client.cookies.set(get_settings().cookie_name, token)
+
+
+def sign_in(client: TestClient, user: User) -> None:
+    """Make `client` act as `user` from now on."""
+    use_token(client, create_access_token(user.id))
