@@ -61,6 +61,9 @@ class ScheduleLineStatus(StrEnum):
 
 
 class PeriodStatus(StrEnum):
+    """FUTURE -> OPEN -> CLOSING -> CLOSED (§5.8; FUTURE added in P1-T4)."""
+
+    FUTURE = "FUTURE"
     OPEN = "OPEN"
     CLOSING = "CLOSING"
     CLOSED = "CLOSED"

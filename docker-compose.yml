@@ -27,6 +27,7 @@ services:
       REVREC_UPLOAD_DIR: /app/storage/uploads
       REVREC_ADMIN_EMAIL: ${REVREC_ADMIN_EMAIL:-admin@revrec.local}
       REVREC_ADMIN_PASSWORD: ${REVREC_ADMIN_PASSWORD:-ChangeMe-Admin1}
+      REVREC_CURRENT_PERIOD: ${REVREC_CURRENT_PERIOD:-}
     ports:
       - "8000:8000"
     volumes:

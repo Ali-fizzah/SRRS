@@ -1,8 +1,9 @@
 """Application settings, read from environment variables with the REVREC_ prefix."""
 
+from datetime import date
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,6 +18,17 @@ class Settings(BaseSettings):
     cookie_secure: bool = False  # True when served over HTTPS
     upload_dir: str = "storage/uploads"
     worker_poll_seconds: float = 1.0
+
+    # Period `make seed` opens when it first creates the periods (D6). YYYYMM;
+    # empty or unset means the current calendar month.
+    current_period: str = Field(
+        default="", pattern=r"^(\d{4}(0[1-9]|1[0-2]))?$", validate_default=True
+    )
+
+    @field_validator("current_period")
+    @classmethod
+    def _default_to_this_month(cls, value: str) -> str:
+        return value or date.today().strftime("%Y%m")
 
     # First admin, created by `make seed` if no user has that email yet.
     admin_email: str = "admin@revrec.local"

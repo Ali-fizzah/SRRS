@@ -80,6 +80,7 @@ def ids(conn: Connection) -> dict[str, int]:
         period_key="202601",
         start_date=date(2026, 1, 1),
         end_date=date(2026, 1, 31),
+        status="OPEN",
     )
     return out
 

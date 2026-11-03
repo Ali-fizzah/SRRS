@@ -7,6 +7,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    Index,
     Integer,
     String,
     Text,
@@ -21,12 +22,21 @@ from app.models.enums import BatchStatus, JournalEntryType, PeriodStatus
 
 class AccountingPeriod(Base):
     __tablename__ = "accounting_periods"
+    # D6: at most one OPEN period (the current period).
+    __table_args__ = (
+        Index(
+            "uq_accounting_periods_one_open",
+            "status",
+            unique=True,
+            postgresql_where=text("status = 'OPEN'"),
+        ),
+    )
 
     period_key: Mapped[PeriodKey] = mapped_column(unique=True)
     start_date: Mapped[date] = mapped_column(Date)
     end_date: Mapped[date] = mapped_column(Date)
     status: Mapped[PeriodStatus] = mapped_column(
-        pg_enum(PeriodStatus, "period_status"), server_default=PeriodStatus.OPEN.value
+        pg_enum(PeriodStatus, "period_status"), server_default=PeriodStatus.FUTURE.value
     )
     closed_by: Mapped[int | None] = fk("users.id", nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
