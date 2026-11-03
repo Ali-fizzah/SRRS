@@ -31,6 +31,7 @@ services:
       - ./backend:/app
       - ./benchmarks:/benchmarks
       - ./tools:/tools
+      - ./docs:/docs
     depends_on:
       postgres:
         condition: service_healthy

@@ -43,9 +43,9 @@ jobs:
       - name: Install
         run: pip install -e ".[dev]"
       - name: Ruff lint
-        run: ruff check . ../benchmarks/tools
+        run: ruff check . ../benchmarks/tools ../tools
       - name: Ruff format
-        run: ruff format --check . ../benchmarks/tools
+        run: ruff format --check . ../benchmarks/tools ../tools
       - name: Mypy
         run: mypy
       - name: Migrations

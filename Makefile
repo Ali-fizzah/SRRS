@@ -13,7 +13,7 @@ endif
 
 N ?= 50000
 
-.PHONY: dev down migrate seed test lint bench convert load
+.PHONY: dev down migrate seed test lint bench convert erd load
 
 dev:
 	docker compose up --build
@@ -31,8 +31,8 @@ test:
 	$(BACKEND) pytest tests/unit tests/integration -q
 
 lint:
-	$(BACKEND) ruff check . ../benchmarks/tools
-	$(BACKEND) ruff format --check . ../benchmarks/tools
+	$(BACKEND) ruff check . ../benchmarks/tools ../tools
+	$(BACKEND) ruff format --check . ../benchmarks/tools ../tools
 	$(BACKEND) mypy
 	$(WEB) npm run lint
 	$(WEB) npm run typecheck
@@ -44,6 +44,10 @@ bench:
 convert:
 	$(BACKEND) python ../benchmarks/tools/convert_revrec_xlsx.py ../benchmarks/source/REVREC_Model_Final.xlsx ../benchmarks/cases/X01_revrec_model_final
 	$(BACKEND) python ../benchmarks/tools/convert_revrec_xlsx.py ../benchmarks/source/REVREC_Mock_Data.xlsx ../benchmarks/cases/X02_revrec_mock_data
+
+# Regenerate docs/erd.md from the SQLAlchemy models.
+erd:
+	$(BACKEND) python ../tools/gen_erd.py ../docs/erd.md
 
 load:
 	$(BACKEND) python ../tools/generate_dataset.py --lines $(N)
