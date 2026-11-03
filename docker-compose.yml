@@ -1,0 +1,63 @@
+# Local dev environment (plan §3, §4): postgres, api, worker, web.
+# Start everything with `make dev`.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-revrec}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-revrec}
+      POSTGRES_DB: ${POSTGRES_DB:-revrec}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-revrec} -d ${POSTGRES_DB:-revrec}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment: &backend-env
+      REVREC_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-revrec}:${POSTGRES_PASSWORD:-revrec}@postgres:5432/${POSTGRES_DB:-revrec}
+      REVREC_JWT_SECRET: ${REVREC_JWT_SECRET:-change-me-in-production}
+      REVREC_UPLOAD_DIR: /app/storage/uploads
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./benchmarks:/benchmarks
+      - ./tools:/tools
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build: ./backend
+    command: python -m app.jobs.worker
+    environment: *backend-env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build: ./frontend
+    command: npm run dev
+    environment:
+      API_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
