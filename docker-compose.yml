@@ -51,9 +51,12 @@ services:
 
   web:
     build: ./frontend
-    command: npm run dev
+    # On Windows/macOS hosts, file-change events do not reach the container through the
+    # bind mount, so the dev server must poll. Turbopack cannot, so Docker uses webpack.
+    command: npm run dev:docker
     environment:
       API_URL: http://api:8000
+      WATCHPACK_POLLING: "true"
     ports:
       - "3000:3000"
     volumes:
