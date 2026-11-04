@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import Select, exists, func, or_, select
 from sqlalchemy.orm import aliased
 
 from app.api.errors import ApiError
@@ -40,19 +40,10 @@ CSV: dict[int | str, dict[str, Any]] = {200: {"content": {"text/csv": {}}}}
 CENT = Decimal("0.01")
 
 
-@router.get("", response_model=Page[ContractOut], responses=CSV, dependencies=CanRead)
-def list_contracts(
-    db: DbSession,
-    params: Listing,
-    customer: Search = None,
-    contract: Search = None,
-    product: Search = None,
-    period_from: PeriodFilter = None,
-    period_to: PeriodFilter = None,
-) -> Any:
-    """Contracts with their current version. The period filters use its booked period."""
+def _contracts() -> Select[Any]:
+    """Contracts with the fields of their current version (ContractOut)."""
     has_schedule = exists().where(PerformanceObligation.contract_version_id == ContractVersion.id)
-    statement = (
+    return (
         select(
             Contract.id,
             Contract.contract_code,
@@ -75,6 +66,20 @@ def list_contracts(
             & (ContractVersion.version_no == Contract.current_version_no),
         )
     )
+
+
+@router.get("", response_model=Page[ContractOut], responses=CSV, dependencies=CanRead)
+def list_contracts(
+    db: DbSession,
+    params: Listing,
+    customer: Search = None,
+    contract: Search = None,
+    product: Search = None,
+    period_from: PeriodFilter = None,
+    period_to: PeriodFilter = None,
+) -> Any:
+    """The period filters use the current version's booked period."""
+    statement = _contracts()
     if customer is not None:
         statement = statement.where(
             or_(
@@ -122,6 +127,15 @@ def list_contracts(
         [Contract.contract_code],
     )
     return list_response(db, statement, params, ContractOut, "contracts.csv")
+
+
+@router.get("/{contract_id}", response_model=ContractOut, dependencies=CanRead)
+def get_contract(contract_id: int, db: DbSession) -> ContractOut:
+    """One contract with its current version; versions, lines and POs arrive in task P3-T6."""
+    row = db.execute(_contracts().where(Contract.id == contract_id)).first()
+    if row is None:
+        raise ApiError(404, "NOT_FOUND", f"Contract {contract_id} does not exist.")
+    return ContractOut.model_validate(dict(row._mapping))
 
 
 @router.get(
@@ -204,7 +218,6 @@ def get_contract_schedule(
     )
 
 
-stub(router, "GET", "/{contract_id}", Role.UPLOADER, "P3-T6")
 stub(router, "GET", "/{contract_id}/versions/{version_no}", Role.UPLOADER, "P3-T6")
 stub(router, "GET", "/{contract_id}/billing", Role.UPLOADER, "P3-T6")
 stub(router, "GET", "/{contract_id}/journal-lines", Role.UPLOADER, "P4-T4")

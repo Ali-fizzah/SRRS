@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.models.enums import (
     ContractEventType,
     ContractStatus,
+    PeriodStatus,
     RecognitionMethod,
     ScheduleLineStatus,
 )
@@ -50,6 +51,14 @@ class SchedulePage(BaseModel):
     page: int
     page_size: int
     total_amount: Decimal  # every matching line, not just this page; superseded lines excluded
+
+
+class PeriodOut(BaseModel):
+    id: int
+    period_key: str
+    start_date: date
+    end_date: date
+    status: PeriodStatus
 
 
 class JobAccepted(BaseModel):

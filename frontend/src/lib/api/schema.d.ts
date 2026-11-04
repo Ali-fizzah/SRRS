@@ -390,9 +390,29 @@ export interface paths {
         };
         /**
          * List Contracts
-         * @description Contracts with their current version. The period filters use its booked period.
+         * @description The period filters use the current version's booked period.
          */
         get: operations["list_contracts_api_v1_contracts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contracts/{contract_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Contract
+         * @description One contract with its current version; versions, lines and POs arrive in task P3-T6.
+         */
+        get: operations["get_contract_api_v1_contracts__contract_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -413,23 +433,6 @@ export interface paths {
          * @description Schedule lines of every version. The period filters use the service period.
          */
         get: operations["get_contract_schedule_api_v1_contracts__contract_id__schedule_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/contracts/{contract_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Built in P3-T6 */
-        get: operations["get_contracts_contract_id_api_v1_contracts__contract_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -513,8 +516,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P5-T1 */
-        get: operations["get_periods_api_v1_periods_get"];
+        /**
+         * List Periods
+         * @description Accounting periods in order; `status=OPEN` finds the current period (D6).
+         */
+        get: operations["list_periods_api_v1_periods_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1108,6 +1114,17 @@ export interface components {
             /** Page Size */
             page_size: number;
         };
+        /** Page[PeriodOut] */
+        Page_PeriodOut_: {
+            /** Items */
+            items: components["schemas"]["PeriodOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
         /** Page[ProductOut] */
         Page_ProductOut_: {
             /** Items */
@@ -1130,6 +1147,30 @@ export interface components {
             /** Page Size */
             page_size: number;
         };
+        /** PeriodOut */
+        PeriodOut: {
+            /** Id */
+            id: number;
+            /** Period Key */
+            period_key: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            status: components["schemas"]["PeriodStatus"];
+        };
+        /**
+         * PeriodStatus
+         * @description FUTURE -> OPEN -> CLOSING -> CLOSED (§5.8; FUTURE added in P1-T4).
+         * @enum {string}
+         */
+        PeriodStatus: "FUTURE" | "OPEN" | "CLOSING" | "CLOSED";
         /** ProductOut */
         ProductOut: {
             /** Id */
@@ -2174,6 +2215,37 @@ export interface operations {
             };
         };
     };
+    get_contract_api_v1_contracts__contract_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contract_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_contract_schedule_api_v1_contracts__contract_id__schedule_get: {
         parameters: {
             query?: {
@@ -2210,26 +2282,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_contracts_contract_id_api_v1_contracts__contract_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
         };
@@ -2314,9 +2366,16 @@ export interface operations {
             };
         };
     };
-    get_periods_api_v1_periods_get: {
+    list_periods_api_v1_periods_get: {
         parameters: {
-            query?: never;
+            query?: {
+                status?: components["schemas"]["PeriodStatus"] | null;
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2324,12 +2383,22 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_PeriodOut_"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

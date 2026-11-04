@@ -180,6 +180,28 @@ def test_contract_list_exports_every_row(api: TestClient, db: Session, user_id: 
     assert rows[0]["transaction_price"] == "1200.00"
 
 
+def test_one_contract_and_unknown_contract(api: TestClient, db: Session, user_id: int) -> None:
+    contract(db, user_id, "000123-U01")
+    cid = contract_id(db, "000123-U01")
+    body = api.get(f"/api/v1/contracts/{cid}").json()
+    assert body["contract_code"] == "000123-U01" and body["transaction_price"] == "1200.00"
+    assert body["has_schedule"] is False
+    run_recognition(db, user_id)
+    assert api.get(f"/api/v1/contracts/{cid}").json()["has_schedule"] is True
+    assert api.get("/api/v1/contracts/999999").status_code == 404
+
+
+def test_periods_list_finds_the_current_period(api: TestClient) -> None:
+    body = api.get("/api/v1/periods?page_size=2").json()
+    assert body["total"] == 48
+    assert [p["period_key"] for p in body["items"]] == ["202501", "202502"]
+    (current,) = api.get("/api/v1/periods?status=OPEN").json()["items"]
+    assert (current["period_key"], current["status"]) == ("202501", "OPEN")
+    assert (current["start_date"], current["end_date"]) == ("2025-01-01", "2025-01-31")
+    assert api.get("/api/v1/periods?status=NOPE").status_code == 422
+    assert api.get("/api/v1/periods?sort=closed_by").status_code == 422
+
+
 # --------------------------------------------------------------------------- GET .../schedule
 
 

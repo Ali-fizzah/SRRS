@@ -61,6 +61,12 @@ make lint LOCAL=1
 | `make lint` | ruff + mypy (backend), eslint + tsc (frontend) |
 | `make load N=50000` | Performance run |
 
+## Demo
+
+[docs/demo-fyp1.md](docs/demo-fyp1.md) is the scripted FYP-I walkthrough, with its dataset and
+screenshots. `make demo-reset CONFIRM=yes` **deletes all data in the development database** and
+seeds it again, ready to present.
+
 ## Benchmarks
 
 `benchmarks/source/` holds the Excel workbooks. `benchmarks/cases/<ID>/` holds one folder per

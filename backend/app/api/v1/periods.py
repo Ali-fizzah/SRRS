@@ -1,24 +1,51 @@
 """Accounting periods, close workflow and engine runs (plan §8 Periods and Engine)."""
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
 from app.api.errors import ApiError
+from app.api.listing import Listing, Page, apply_sort, list_response
 from app.api.v1.stubs import stub
 from app.audit import write_audit
-from app.auth.deps import CurrentUser, DbSession, require_role
+from app.auth.deps import CurrentUser, DbSession, get_current_user, require_role
 from app.auth.roles import Role
 from app.jobs.queue import enqueue
 from app.models import AccountingPeriod
 from app.models.enums import JobType, PeriodStatus
-from app.schemas.contracts import JobAccepted
+from app.schemas.contracts import JobAccepted, PeriodOut
 
 router = APIRouter(prefix="/periods", tags=["periods"])
 
+
 # §8 lists no role for reading periods; the dashboard shows the current period to everyone.
-stub(router, "GET", "", None, "P5-T1")
+@router.get(
+    "",
+    response_model=Page[PeriodOut],
+    responses={200: {"content": {"text/csv": {}}}},
+    dependencies=[Depends(get_current_user)],
+)
+def list_periods(db: DbSession, params: Listing, status: PeriodStatus | None = None) -> Any:
+    """Accounting periods in order; `status=OPEN` finds the current period (D6)."""
+    statement = select(
+        AccountingPeriod.id,
+        AccountingPeriod.period_key,
+        AccountingPeriod.start_date,
+        AccountingPeriod.end_date,
+        AccountingPeriod.status,
+    )
+    if status is not None:
+        statement = statement.where(AccountingPeriod.status == status)
+    statement = apply_sort(
+        statement,
+        params.sort,
+        {"period_key": AccountingPeriod.period_key, "status": AccountingPeriod.status},
+        [AccountingPeriod.period_key],
+    )
+    return list_response(db, statement, params, PeriodOut, "periods.csv")
+
+
 stub(router, "GET", "/{key}/checklist", None, "P5-T1")
 stub(router, "POST", "/{key}/start-close", Role.ACCOUNTANT, "P5-T1")
 stub(router, "POST", "/{key}/close", Role.APPROVER, "P5-T1")

@@ -9,7 +9,7 @@ import {
   type GridSortModel,
 } from "@mui/x-data-grid";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { apiGet } from "@/lib/api/client";
 
@@ -25,6 +25,10 @@ type Props<T extends { id: number }> = {
   refetchInterval?: (rows: T[]) => number | false;
   /** Grow rows to fit long text instead of cutting it off. */
   wrapText?: boolean;
+  /** Filters sent to the API (plan §8). Changing them goes back to page 1. */
+  filters?: Record<string, string | undefined>;
+  /** Shown above the grid, from the same response, e.g. a total computed by the server. */
+  renderSummary?: (data: Page<T> & Record<string, unknown>) => ReactNode;
 };
 
 /**
@@ -38,6 +42,8 @@ export default function ServerDataGrid<T extends { id: number }>({
   emptyText,
   refetchInterval,
   wrapText = false,
+  filters,
+  renderSummary,
 }: Props<T>) {
   const [pagination, setPagination] = useState<GridPaginationModel>({ page: 0, pageSize: 25 });
   const [sortModel, setSortModel] = useState<GridSortModel>([]);
@@ -45,13 +51,22 @@ export default function ServerDataGrid<T extends { id: number }>({
     ? `${sortModel[0].sort === "desc" ? "-" : ""}${sortModel[0].field}`
     : undefined;
 
+  // New filters start at page 1. Adjusting state during render sends one request, not two.
+  const filterKey = JSON.stringify(filters ?? {});
+  const [appliedFilterKey, setAppliedFilterKey] = useState(filterKey);
+  if (filterKey !== appliedFilterKey) {
+    setAppliedFilterKey(filterKey);
+    setPagination((current) => ({ ...current, page: 0 }));
+  }
+
   const query = useQuery({
-    queryKey: [path, pagination.page, pagination.pageSize, sort],
+    queryKey: [path, pagination.page, pagination.pageSize, sort, filterKey],
     queryFn: () =>
-      apiGet<Page<T>>(path, {
+      apiGet<Page<T> & Record<string, unknown>>(path, {
         page: pagination.page + 1,
         page_size: pagination.pageSize,
         sort,
+        ...filters,
       }),
     placeholderData: keepPreviousData,
     refetchInterval: (q) => refetchInterval?.(q.state.data?.items ?? []) ?? false,
@@ -60,6 +75,7 @@ export default function ServerDataGrid<T extends { id: number }>({
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {query.isError && <Alert severity="error">{query.error.message}</Alert>}
+      {query.data && renderSummary?.(query.data)}
       <DataGrid
         aria-label={label}
         rows={query.data?.items ?? []}

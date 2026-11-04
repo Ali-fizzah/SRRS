@@ -1,12 +1,6 @@
-import PlaceholderPage from "@/components/PlaceholderPage";
+import ContractDetail from "@/components/contracts/ContractDetail";
 
-export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+export default async function ContractPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return (
-    <PlaceholderPage
-      title={`Contract ${id}`}
-      description="Versions timeline, lines, POs and allocation, schedule, billing, journal lines, source rows."
-      task="P2-T5 / P3-T8"
-    />
-  );
+  return <ContractDetail id={id} />;
 }

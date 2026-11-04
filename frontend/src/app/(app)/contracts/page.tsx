@@ -1,5 +1,15 @@
-import RoutePlaceholder from "@/components/RoutePlaceholder";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
 
-export default function Page() {
-  return <RoutePlaceholder path="/contracts" />;
+import ContractsGrid from "@/components/contracts/ContractsGrid";
+import RecognitionRunCard from "@/components/contracts/RecognitionRunCard";
+
+export default function ContractsPage() {
+  return (
+    <Stack spacing={2}>
+      <Typography variant="h1">Contracts</Typography>
+      <RecognitionRunCard />
+      <ContractsGrid />
+    </Stack>
+  );
 }

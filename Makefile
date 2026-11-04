@@ -13,7 +13,7 @@ endif
 
 N ?= 50000
 
-.PHONY: dev down migrate seed test lint bench convert erd load
+.PHONY: dev down migrate seed test lint bench convert erd load demo-reset
 
 dev:
 	# -V: renew the web container's node_modules volume, or new npm packages stay invisible.
@@ -49,6 +49,17 @@ convert:
 # Regenerate docs/erd.md from the SQLAlchemy models.
 erd:
 	$(BACKEND) python ../tools/gen_erd.py ../docs/erd.md
+
+# Clean database for the demo (docs/demo-fyp1.md). DELETES ALL DATA in the dev database.
+demo-reset:
+ifneq ($(CONFIRM),yes)
+	$(error This deletes all data in the dev database. Run: make demo-reset CONFIRM=yes)
+endif
+	docker compose exec -T postgres dropdb -U revrec --force revrec
+	docker compose exec -T postgres createdb -U revrec revrec
+	docker compose run --rm api alembic upgrade head
+	docker compose run --rm -e REVREC_CURRENT_PERIOD=202612 api python ../tools/seed.py
+	docker compose restart worker
 
 load:
 	$(BACKEND) python ../tools/generate_dataset.py --lines $(N)

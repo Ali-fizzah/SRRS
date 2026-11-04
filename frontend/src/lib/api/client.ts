@@ -40,6 +40,13 @@ export async function apiGet<T>(
   return (await res.json()) as T;
 }
 
+/** Start a recognition run for a period: the server queues a job (plan §10). */
+export async function postRecognitionRun(periodKey: string): Promise<Schemas["JobAccepted"]> {
+  const res = await fetch(`/api/v1/periods/${periodKey}/recognition-run`, { method: "POST" });
+  if (!res.ok) throw await readError(res);
+  return (await res.json()) as Schemas["JobAccepted"];
+}
+
 /** POST /uploads: the server queues a job and answers at once (plan §10). */
 export async function postUploads(files: File[]): Promise<Schemas["UploadAccepted"]> {
   const form = new FormData();

@@ -10,12 +10,13 @@ import Chip from "@mui/material/Chip";
 import LinearProgress from "@mui/material/LinearProgress";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { type DragEvent, useEffect, useRef, useState } from "react";
 
 import StatusChip, { type UploadStatus } from "@/components/uploads/StatusChip";
-import { apiGet, postUploads, type Schemas } from "@/lib/api/client";
+import { postUploads } from "@/lib/api/client";
+import { isJobFinished, useJob } from "@/lib/api/useJob";
 
 type UploadResult = {
   upload_id: number;
@@ -42,14 +43,8 @@ export default function UploadDropzone() {
   });
   const accepted = upload.data;
 
-  const job = useQuery({
-    queryKey: ["job", accepted?.job_id],
-    queryFn: () => apiGet<Schemas["JobOut"]>(`/jobs/${accepted?.job_id}`),
-    enabled: accepted !== undefined,
-    refetchInterval: (q) =>
-      q.state.data?.status === "DONE" || q.state.data?.status === "FAILED" ? false : 1500,
-  });
-  const finished = job.data?.status === "DONE" || job.data?.status === "FAILED";
+  const job = useJob(accepted?.job_id);
+  const finished = isJobFinished(job.data);
 
   useEffect(() => {
     if (finished) void queryClient.invalidateQueries({ queryKey: ["/uploads"] });
