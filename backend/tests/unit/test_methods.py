@@ -1,13 +1,14 @@
 """P2-T1: ratable_monthly in integer cents (plan §5.3, golden cases U01 and B01)."""
 
 from datetime import date
+from decimal import Decimal
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
 from app.engine.methods import ScheduleAmount, ratable_monthly
-from app.engine.money import round_half_up_div
+from app.engine.money import from_cents, round_half_up_div, to_cents
 from app.engine.periods import next_period, period_bounds
 
 JAN_1 = date(2025, 1, 1)
@@ -135,6 +136,22 @@ def test_round_half_up_div_is_within_half_of_the_true_value(
     result = round_half_up_div(numerator, denominator)
     # Compare with exact integers: |result - n/d| <= 1/2, and a tie goes up.
     assert -denominator < 2 * (result * denominator - numerator) <= denominator
+
+
+@given(cents=st.integers(min_value=-(10**15), max_value=10**15))
+def test_cents_and_decimal_money_convert_exactly_both_ways(cents: int) -> None:
+    money = from_cents(cents)
+    assert money.as_tuple().exponent == -2
+    assert to_cents(money) == cents
+
+
+def test_money_conversion_examples_and_refusal() -> None:
+    assert to_cents(Decimal("933.37")) == 93_337
+    assert to_cents(Decimal("100")) == 10_000
+    assert str(from_cents(93_337)) == "933.37"
+    assert str(from_cents(5)) == "0.05"
+    with pytest.raises(ValueError, match="whole number of cents"):
+        to_cents(Decimal("1.005"))
 
 
 def test_round_half_up_div_refuses_what_it_does_not_define() -> None:
