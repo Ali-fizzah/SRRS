@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     cookie_name: str = "revrec_session"
     cookie_secure: bool = False  # True when served over HTTPS
     upload_dir: str = "storage/uploads"
+    max_upload_bytes: int = 50 * 1024 * 1024  # per file
     worker_poll_seconds: float = 1.0
 
     # Period `make seed` opens when it first creates the periods (D6). YYYYMM;

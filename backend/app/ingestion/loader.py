@@ -13,7 +13,7 @@ recognition run (P2/P3), not here.
 """
 
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
@@ -77,9 +77,15 @@ class UploadSummary:
 
 
 def load_upload(
-    db: Session, files: Sequence[tuple[UploadFile, bytes]], user_id: int | None
+    db: Session,
+    files: Sequence[tuple[UploadFile, bytes]],
+    user_id: int | None,
+    report: Callable[[int], None] = lambda progress: None,
 ) -> list[UploadSummary]:
-    """Process every file of one upload. The caller commits."""
+    """Process every file of one upload. The caller commits.
+
+    `report` receives the percentage done after each stage (plan §10).
+    """
     for upload, _ in files:
         upload.status = UploadStatus.VALIDATING
     db.flush()
@@ -120,10 +126,13 @@ def load_upload(
                 ),
             )
         parsed = {}
+    report(30)
 
     results = validate_batch(parsed, _existing(db, current, parsed)) if parsed else {}
+    report(60)
     if results:
         _Writer(db, current or "", upload_of).write(results)
+    report(90)
 
     summaries = []
     for upload, _ in files:

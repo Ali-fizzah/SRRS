@@ -14,11 +14,12 @@ from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection, Engine, create_engine, select, text
 from sqlalchemy.engine import URL, make_url
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.auth.roles import Role
 from app.auth.tokens import create_access_token
 from app.config import get_settings
+from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 from app.models import Role as RoleRow
@@ -87,6 +88,34 @@ def db(conn: Connection) -> Iterator[Session]:
 def client(db: Session) -> Iterator[TestClient]:
     """API client whose requests use the test transaction."""
     app.dependency_overrides[get_db] = lambda: db
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def committed(migrated_engine: Engine) -> Iterator[sessionmaker[Session]]:
+    """Sessions that really commit, for code using several connections (the job queue).
+
+    Everything is wiped afterwards. TRUNCATE is the one way past the append-only triggers;
+    `roles` stays because a migration created it.
+    """
+    yield sessionmaker(bind=migrated_engine, autoflush=False, expire_on_commit=False)
+    names = ", ".join(t.name for t in Base.metadata.sorted_tables if t.name != "roles")
+    with migrated_engine.begin() as connection:
+        connection.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
+
+
+@pytest.fixture
+def committed_client(committed: sessionmaker[Session]) -> Iterator[TestClient]:
+    """API client whose requests commit for real, one session per request."""
+
+    def session_per_request() -> Iterator[Session]:
+        with committed() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = session_per_request
     try:
         yield TestClient(app)
     finally:

@@ -20,7 +20,8 @@ from typing import Any
 
 import pandas as pd
 
-from app.ingestion.templates import Column, ColumnType, Template
+from app.ingestion.templates import TEMPLATES, Column, ColumnType, Template
+from app.models.enums import UploadTemplate
 
 # --------------------------------------------------------------------------- errors
 
@@ -89,6 +90,28 @@ def read_table(content: bytes, filename: str, template: Template) -> RawTable:
         numbers.append(number)
     frame = pd.DataFrame(data, columns=template.headers, dtype=str)
     return RawTable(frame=frame, row_numbers=numbers)
+
+
+def detect_template(content: bytes, filename: str) -> UploadTemplate | None:
+    """Which template a file belongs to: its exact header row, else a template name in the
+    filename (so a file with broken headers still gets a proper E011 in its log)."""
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    readers = {"csv": _csv_rows, "xlsx": _xlsx_rows}
+    if extension in readers:
+        try:
+            rows = readers[extension](content)
+        except FileRejectedError:
+            rows = []
+        if rows:
+            header = _trim_trailing_blanks(rows[0][1])
+            for template in TEMPLATES.values():
+                if header == template.headers:
+                    return template.name
+    stem = filename.rsplit(".", 1)[0].lower()
+    for name in TEMPLATES:
+        if name.value in stem:
+            return name
+    return None
 
 
 def _csv_rows(content: bytes) -> list[tuple[int, list[str]]]:
