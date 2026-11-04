@@ -11,7 +11,8 @@ import Typography from "@mui/material/Typography";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
-import { ApiError, signIn } from "@/lib/session";
+import { ApiError } from "@/lib/api/client";
+import { signIn } from "@/lib/session";
 
 /** Sign in (plan §9 /login). On success the API sets the session cookie (D11). */
 export default function LoginPage() {

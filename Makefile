@@ -16,7 +16,8 @@ N ?= 50000
 .PHONY: dev down migrate seed test lint bench convert erd load
 
 dev:
-	docker compose up --build
+	# -V: renew the web container's node_modules volume, or new npm packages stay invisible.
+	docker compose up --build -V
 
 down:
 	docker compose down

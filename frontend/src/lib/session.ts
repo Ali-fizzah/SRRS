@@ -2,36 +2,9 @@
 // The session itself is an httpOnly cookie: the browser stores and sends it;
 // this code never sees the token.
 
-export type Role = "UPLOADER" | "ACCOUNTANT" | "APPROVER" | "ADMIN";
+import { readError, type Schemas } from "@/lib/api/client";
 
-export type SessionUser = {
-  id: number;
-  email: string;
-  full_name: string;
-  is_active: boolean;
-  roles: Role[];
-};
-
-type ApiErrorBody = { error?: { code?: string; message?: string } };
-
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-async function readError(res: Response): Promise<ApiError> {
-  const body = (await res.json().catch(() => ({}))) as ApiErrorBody;
-  return new ApiError(
-    res.status,
-    body.error?.code ?? "ERROR",
-    body.error?.message ?? `Request failed (${res.status}).`,
-  );
-}
+export type SessionUser = Schemas["UserOut"];
 
 /** The signed-in user, or null when nobody is signed in. */
 export async function fetchMe(): Promise<SessionUser | null> {

@@ -1,4 +1,4 @@
-"""Response bodies for POST /uploads and GET /jobs/{id} (plan §8, §10)."""
+"""Response bodies for /uploads and /jobs (plan §8, §10)."""
 
 from datetime import datetime
 from typing import Any
@@ -32,3 +32,39 @@ class JobOut(BaseModel):
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+
+
+class UploadOut(BaseModel):
+    id: int
+    template: UploadTemplate
+    original_filename: str
+    period_key: str
+    status: UploadStatus
+    total_rows: int
+    accepted_rows: int
+    rejected_rows: int
+    uploaded_by: str  # the uploader's name
+    created_at: datetime
+
+
+class UploadPage(BaseModel):
+    items: list[UploadOut]
+    total: int
+    page: int
+    page_size: int
+
+
+class ValidationErrorOut(BaseModel):
+    id: int
+    row_number: int
+    column_name: str | None
+    error_code: str
+    message: str
+    raw_value: str | None
+
+
+class ValidationErrorPage(BaseModel):
+    items: list[ValidationErrorOut]
+    total: int
+    page: int
+    page_size: int
