@@ -6,6 +6,7 @@ import time
 from types import FrameType
 
 import app.jobs.ingest  # noqa: F401  (registers the INGEST handler)
+import app.jobs.recognition  # noqa: F401  (registers the RECOGNITION handler)
 from app.config import get_settings
 from app.db.session import SessionLocal
 from app.jobs.queue import run_next_job

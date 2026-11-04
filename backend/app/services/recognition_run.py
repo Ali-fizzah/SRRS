@@ -9,6 +9,7 @@ handle yet are reported and left untouched, so a later run picks them up.
 """
 
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
@@ -84,9 +85,15 @@ def rule_on(rules: list[SspRule], when: date) -> SspRule | None:
 
 
 def run_recognition(
-    db: Session, user_id: int | None = None, job_id: int | None = None
+    db: Session,
+    user_id: int | None = None,
+    job_id: int | None = None,
+    report: Callable[[int], None] = lambda progress: None,
 ) -> RunSummary:
-    """Generate schedules for every contract that needs them. The caller commits."""
+    """Generate schedules for every contract that needs them. The caller commits.
+
+    `report` receives the percentage done after each stage (plan §10).
+    """
     versions = list(
         db.execute(
             select(ContractVersion, Contract.contract_code)
@@ -104,6 +111,7 @@ def run_recognition(
         ).tuples()
     )
     lines_of, rules_of = _load_lines_and_rules(db, [version.id for version, _ in versions])
+    report(30)
 
     summary = RunSummary()
     for version, code in versions:
@@ -118,6 +126,7 @@ def run_recognition(
             summary.schedule_lines_created += len(schedule)
         summary.contracts_generated += 1
     db.flush()
+    report(90)
 
     write_audit(
         db,

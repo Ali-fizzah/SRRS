@@ -1,12 +1,12 @@
 """Master data (plan §8 Master data: read UPLOADER, write ACCOUNTANT)."""
 
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy import or_, select
 
 from app.api.errors import ApiError
-from app.api.listing import Listing, Page, apply_sort, list_response
+from app.api.listing import Listing, Page, Search, apply_sort, list_response
 from app.api.v1.stubs import stub
 from app.auth.deps import DbSession, require_role
 from app.auth.roles import Role
@@ -18,7 +18,6 @@ router = APIRouter(tags=["master data"])
 READ, WRITE = Role.UPLOADER, Role.ACCOUNTANT
 CanRead = [Depends(require_role(READ))]
 CSV: dict[int | str, dict[str, Any]] = {200: {"content": {"text/csv": {}}}}
-Search = Annotated[str | None, Query(min_length=1, max_length=128)]
 
 # §8 and §9 include editing, but P1-T11 is read-only and no §12 task schedules it yet.
 EDITING = "master-data editing (not yet scheduled in plan §12)"

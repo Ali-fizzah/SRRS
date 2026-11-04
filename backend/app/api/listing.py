@@ -34,6 +34,10 @@ def _list_params(
 
 
 Listing = Annotated[ListParams, Depends(_list_params)]
+PeriodFilter = Annotated[str | None, Query(pattern=r"^\d{6}$")]  # §8 period_from / period_to
+Search = Annotated[
+    str | None, Query(min_length=1, max_length=128)
+]  # §8 customer, contract, product
 
 
 def apply_sort(

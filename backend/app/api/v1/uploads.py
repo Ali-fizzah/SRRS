@@ -5,14 +5,14 @@ import uuid
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, File, Query
+from fastapi import APIRouter, Depends, File
 from fastapi import UploadFile as IncomingFile
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.errors import ApiError
-from app.api.listing import Listing, apply_sort, csv_response, page_of
+from app.api.listing import Listing, PeriodFilter, apply_sort, csv_response, page_of
 from app.audit import write_audit
 from app.auth.deps import CurrentUser, DbSession, require_role
 from app.auth.roles import Role
@@ -152,7 +152,6 @@ _ERROR_SORTS = {
     "column_name": ValidationError.column_name,
     "error_code": ValidationError.error_code,
 }
-PeriodFilter = Annotated[str | None, Query(pattern=r"^\d{6}$")]
 
 
 def _upload_out(row: Any) -> UploadOut:

@@ -388,8 +388,31 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P2-T4 */
-        get: operations["get_contracts_api_v1_contracts_get"];
+        /**
+         * List Contracts
+         * @description Contracts with their current version. The period filters use its booked period.
+         */
+        get: operations["list_contracts_api_v1_contracts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contracts/{contract_id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Contract Schedule
+         * @description Schedule lines of every version. The period filters use the service period.
+         */
+        get: operations["get_contract_schedule_api_v1_contracts__contract_id__schedule_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -424,23 +447,6 @@ export interface paths {
         };
         /** Built in P3-T6 */
         get: operations["get_contracts_contract_id_versions_version_no_api_v1_contracts__contract_id__versions__version_no__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/contracts/{contract_id}/schedule": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Built in P2-T4 */
-        get: operations["get_contracts_contract_id_schedule_api_v1_contracts__contract_id__schedule_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -594,8 +600,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Built in P2-T4 */
-        post: operations["post_periods_key_recognition_run_api_v1_periods__key__recognition_run_post"];
+        /**
+         * Start Recognition Run
+         * @description Queue a RECOGNITION job for the current period (plan §5.4, §10).
+         *
+         *     OPEN or CLOSING: during close the period is still current and journals are still
+         *     generated (§5.8). Earlier and later periods are refused.
+         */
+        post: operations["start_recognition_run_api_v1_periods__key__recognition_run_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -903,6 +915,55 @@ export interface components {
          * @enum {string}
          */
         ColumnType: "TEXT" | "INTEGER" | "DECIMAL" | "MONEY" | "DATE" | "CHOICE" | "YES_NO";
+        /**
+         * ContractEventType
+         * @enum {string}
+         */
+        ContractEventType: "NEW" | "RENEWAL" | "CANCELLATION" | "UPGRADE";
+        /**
+         * ContractOut
+         * @description A contract with the fields of its current version.
+         */
+        ContractOut: {
+            /** Id */
+            id: number;
+            /** Contract Code */
+            contract_code: string;
+            /** Customer Code */
+            customer_code: string;
+            /** Customer Name */
+            customer_name: string;
+            status: components["schemas"]["ContractStatus"];
+            /** Current Version No */
+            current_version_no: number;
+            event_type: components["schemas"]["ContractEventType"];
+            /**
+             * Effective Date
+             * Format: date
+             */
+            effective_date: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Transaction Price */
+            transaction_price: string;
+            /** Booked Period */
+            booked_period: string;
+            /** Has Schedule */
+            has_schedule: boolean;
+        };
+        /**
+         * ContractStatus
+         * @enum {string}
+         */
+        ContractStatus: "ACTIVE" | "CANCELLED" | "EXPIRED";
         /** CustomerOut */
         CustomerOut: {
             /** Id */
@@ -957,6 +1018,11 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** JobAccepted */
+        JobAccepted: {
+            /** Job Id */
+            job_id: number;
+        };
         /** JobOut */
         JobOut: {
             /** Id */
@@ -997,6 +1063,17 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** Page[ContractOut] */
+        Page_ContractOut_: {
+            /** Items */
+            items: components["schemas"]["ContractOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
         };
         /** Page[CustomerOut] */
         Page_CustomerOut_: {
@@ -1090,6 +1167,45 @@ export interface components {
          * @enum {string}
          */
         Role: "UPLOADER" | "ACCOUNTANT" | "APPROVER" | "ADMIN";
+        /** ScheduleLineOut */
+        ScheduleLineOut: {
+            /** Id */
+            id: number;
+            /** Version No */
+            version_no: number;
+            /** Line No */
+            line_no: number;
+            /** Product Code */
+            product_code: string;
+            method: components["schemas"]["RecognitionMethod"];
+            /** Service Period */
+            service_period: string;
+            /** Amount */
+            amount: string;
+            status: components["schemas"]["ScheduleLineStatus"];
+            /** Posting Period */
+            posting_period: string | null;
+            /** Is Catch Up */
+            is_catch_up: boolean;
+        };
+        /**
+         * ScheduleLineStatus
+         * @enum {string}
+         */
+        ScheduleLineStatus: "PENDING" | "POSTED" | "SUPERSEDED";
+        /** SchedulePage */
+        SchedulePage: {
+            /** Items */
+            items: components["schemas"]["ScheduleLineOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total Amount */
+            total_amount: string;
+        };
         /** SspRuleOut */
         SspRuleOut: {
             /** Id */
@@ -2017,9 +2133,20 @@ export interface operations {
             };
         };
     };
-    get_contracts_api_v1_contracts_get: {
+    list_contracts_api_v1_contracts_get: {
         parameters: {
-            query?: never;
+            query?: {
+                customer?: string | null;
+                contract?: string | null;
+                product?: string | null;
+                period_from?: string | null;
+                period_to?: string | null;
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2027,12 +2154,62 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_ContractOut_"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_contract_schedule_api_v1_contracts__contract_id__schedule_get: {
+        parameters: {
+            query?: {
+                period_from?: string | null;
+                period_to?: string | null;
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                contract_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchedulePage"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2058,26 +2235,6 @@ export interface operations {
         };
     };
     get_contracts_contract_id_versions_version_no_api_v1_contracts__contract_id__versions__version_no__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_contracts_contract_id_schedule_api_v1_contracts__contract_id__schedule_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2257,22 +2414,33 @@ export interface operations {
             };
         };
     };
-    post_periods_key_recognition_run_api_v1_periods__key__recognition_run_post: {
+    start_recognition_run_api_v1_periods__key__recognition_run_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                key: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["JobAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
