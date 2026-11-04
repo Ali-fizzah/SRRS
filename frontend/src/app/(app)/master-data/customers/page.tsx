@@ -1,5 +1,12 @@
-import RoutePlaceholder from "@/components/RoutePlaceholder";
+import CustomersGrid from "@/components/master/CustomersGrid";
+import MasterPage from "@/components/master/MasterPage";
+import { routeInfo } from "@/components/routes";
 
 export default function Page() {
-  return <RoutePlaceholder path="/master-data/customers" />;
+  const { title, description } = routeInfo("/master-data/customers");
+  return (
+    <MasterPage title={title} description={description}>
+      <CustomersGrid />
+    </MasterPage>
+  );
 }

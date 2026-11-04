@@ -72,7 +72,11 @@ export default function ServerDataGrid<T extends { id: number }>({
         pageSizeOptions={[25, 50, 100]}
         sortingMode="server"
         sortModel={sortModel}
-        onSortModelChange={setSortModel}
+        onSortModelChange={(model) => {
+          // A new order starts at page 1; changing both together sends one request, not two.
+          setSortModel(model);
+          setPagination((current) => ({ ...current, page: 0 }));
+        }}
         disableColumnFilter
         disableRowSelectionOnClick
         localeText={{ noRowsLabel: emptyText }}

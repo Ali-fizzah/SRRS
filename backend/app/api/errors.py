@@ -31,7 +31,7 @@ class ApiError(Exception):
 
 def not_implemented(task: str) -> ApiError:
     """Response of a §8 endpoint whose behaviour arrives in a later task."""
-    return ApiError(501, "NOT_IMPLEMENTED", f"This endpoint is built in task {task}.")
+    return ApiError(501, "NOT_IMPLEMENTED", f"Not built yet: {task}.")
 
 
 def _body(code: str, message: str, details: Any = None) -> dict[str, Any]:

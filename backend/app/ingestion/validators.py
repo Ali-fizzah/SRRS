@@ -201,7 +201,7 @@ def _products(rows: list[Row], known: _Known) -> None:
             row.fail(
                 "E006",
                 "product_id",
-                f"Product {code} already exists; change it on the Products page instead.",
+                f"Product {code} already exists; an upload cannot change an existing product.",
             )
         account = row.values.get("revenue_gl_account")
         if account is not None:

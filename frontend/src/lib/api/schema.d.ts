@@ -246,8 +246,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P1-T11 */
-        get: operations["get_customers_api_v1_customers_get"];
+        /** List Customers */
+        get: operations["list_customers_api_v1_customers_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -263,11 +263,67 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P1-T11 */
-        get: operations["get_products_api_v1_products_get"];
+        /** List Products */
+        get: operations["list_products_api_v1_products_get"];
         put?: never;
-        /** Built in P1-T11 */
+        /** Built in master-data editing (not yet scheduled in plan §12) */
         post: operations["post_products_api_v1_products_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/products/{product_id}/ssp-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Ssp History
+         * @description Every SSP rule of a product, newest first; rules are added, never overwritten (§5.2).
+         */
+        get: operations["list_ssp_history_api_v1_products__product_id__ssp_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gl-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Gl Accounts */
+        get: operations["list_gl_accounts_api_v1_gl_accounts_get"];
+        put?: never;
+        /** Built in master-data editing (not yet scheduled in plan §12) */
+        post: operations["post_gl_accounts_api_v1_gl_accounts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gl-mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Gl Mappings */
+        get: operations["list_gl_mappings_api_v1_gl_mappings_get"];
+        put?: never;
+        /** Built in master-data editing (not yet scheduled in plan §12) */
+        post: operations["post_gl_mappings_api_v1_gl_mappings_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -287,43 +343,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Built in P1-T11 */
+        /** Built in master-data editing (not yet scheduled in plan §12) */
         patch: operations["patch_products_product_id_api_v1_products__product_id__patch"];
-        trace?: never;
-    };
-    "/api/v1/products/{product_id}/ssp-history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Built in P1-T11 */
-        get: operations["get_products_product_id_ssp_history_api_v1_products__product_id__ssp_history_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/gl-accounts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Built in P1-T11 */
-        get: operations["get_gl_accounts_api_v1_gl_accounts_get"];
-        put?: never;
-        /** Built in P1-T11 */
-        post: operations["post_gl_accounts_api_v1_gl_accounts_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/v1/gl-accounts/{account_id}": {
@@ -339,26 +360,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Built in P1-T11 */
+        /** Built in master-data editing (not yet scheduled in plan §12) */
         patch: operations["patch_gl_accounts_account_id_api_v1_gl_accounts__account_id__patch"];
-        trace?: never;
-    };
-    "/api/v1/gl-mappings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Built in P1-T11 */
-        get: operations["get_gl_mappings_api_v1_gl_mappings_get"];
-        put?: never;
-        /** Built in P1-T11 */
-        post: operations["post_gl_mappings_api_v1_gl_mappings_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/v1/gl-mappings/{mapping_id}": {
@@ -374,7 +377,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Built in P1-T11 */
+        /** Built in master-data editing (not yet scheduled in plan §12) */
         patch: operations["patch_gl_mappings_mapping_id_api_v1_gl_mappings__mapping_id__patch"];
         trace?: never;
     };
@@ -884,6 +887,12 @@ export interface components {
             template: components["schemas"]["UploadTemplate"];
             status: components["schemas"]["UploadStatus"];
         };
+        /**
+         * AccountRole
+         * @description D12: roles that GL mappings resolve to accounts.
+         * @enum {string}
+         */
+        AccountRole: "AR" | "UNBILLED_AR" | "DEFERRED_REVENUE" | "REVENUE";
         /** Body_create_upload_api_v1_uploads_post */
         Body_create_upload_api_v1_uploads_post: {
             /** Files */
@@ -894,6 +903,55 @@ export interface components {
          * @enum {string}
          */
         ColumnType: "TEXT" | "INTEGER" | "DECIMAL" | "MONEY" | "DATE" | "CHOICE" | "YES_NO";
+        /** CustomerOut */
+        CustomerOut: {
+            /** Id */
+            id: number;
+            /** Customer Code */
+            customer_code: string;
+            /** Name */
+            name: string;
+            /** Country */
+            country: string;
+            /** Source Upload Id */
+            source_upload_id: number | null;
+            /** Source Row */
+            source_row: number | null;
+        };
+        /** GlAccountOut */
+        GlAccountOut: {
+            /** Id */
+            id: number;
+            /** Account Code */
+            account_code: string;
+            /** Name */
+            name: string;
+            type: components["schemas"]["GlAccountType"];
+            /** Is Active */
+            is_active: boolean;
+        };
+        /**
+         * GlAccountType
+         * @enum {string}
+         */
+        GlAccountType: "ASSET" | "LIABILITY" | "REVENUE";
+        /**
+         * GlMappingOut
+         * @description D12: product set = product mapping; category set = category mapping; neither = default.
+         */
+        GlMappingOut: {
+            /** Id */
+            id: number;
+            account_role: components["schemas"]["AccountRole"];
+            /** Product Code */
+            product_code: string | null;
+            /** Product Category */
+            product_category: string | null;
+            /** Account Code */
+            account_code: string;
+            /** Account Name */
+            account_name: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -940,11 +998,124 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** Page[CustomerOut] */
+        Page_CustomerOut_: {
+            /** Items */
+            items: components["schemas"]["CustomerOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** Page[GlAccountOut] */
+        Page_GlAccountOut_: {
+            /** Items */
+            items: components["schemas"]["GlAccountOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** Page[GlMappingOut] */
+        Page_GlMappingOut_: {
+            /** Items */
+            items: components["schemas"]["GlMappingOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** Page[ProductOut] */
+        Page_ProductOut_: {
+            /** Items */
+            items: components["schemas"]["ProductOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** Page[SspRuleOut] */
+        Page_SspRuleOut_: {
+            /** Items */
+            items: components["schemas"]["SspRuleOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** ProductOut */
+        ProductOut: {
+            /** Id */
+            id: number;
+            /** Product Code */
+            product_code: string;
+            /** Name */
+            name: string;
+            /** Category */
+            category: string | null;
+            /** List Price */
+            list_price: string;
+            recognition_method: components["schemas"]["RecognitionMethod"];
+            /** Is Separate Obligation */
+            is_separate_obligation: boolean;
+            /** Revenue Account */
+            revenue_account: string;
+            ssp_source: components["schemas"]["SspSource"] | null;
+            /** Ssp Value */
+            ssp_value: string | null;
+            /** Ssp Pct */
+            ssp_pct: string | null;
+            /** Source Upload Id */
+            source_upload_id: number | null;
+            /** Source Row */
+            source_row: number | null;
+        };
+        /**
+         * RecognitionMethod
+         * @enum {string}
+         */
+        RecognitionMethod: "RATABLE_DAILY" | "RATABLE_MONTHLY" | "POINT_IN_TIME";
         /**
          * Role
          * @enum {string}
          */
         Role: "UPLOADER" | "ACCOUNTANT" | "APPROVER" | "ADMIN";
+        /** SspRuleOut */
+        SspRuleOut: {
+            /** Id */
+            id: number;
+            ssp_source: components["schemas"]["SspSource"];
+            /** Ssp Value */
+            ssp_value: string | null;
+            /** Ssp Pct */
+            ssp_pct: string | null;
+            /**
+             * Valid From
+             * Format: date
+             */
+            valid_from: string;
+            /** Valid To */
+            valid_to: string | null;
+            /** Source Upload Id */
+            source_upload_id: number | null;
+            /** Source Row */
+            source_row: number | null;
+        };
+        /**
+         * SspSource
+         * @enum {string}
+         */
+        SspSource: "FIXED" | "LIST_PRICE" | "PCT_OF_LIST";
         /** TemplateColumnOut */
         TemplateColumnOut: {
             /** Name */
@@ -1541,9 +1712,16 @@ export interface operations {
             };
         };
     };
-    get_customers_api_v1_customers_get: {
+    list_customers_api_v1_customers_get: {
         parameters: {
-            query?: never;
+            query?: {
+                customer?: string | null;
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1551,19 +1729,36 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_CustomerOut_"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    get_products_api_v1_products_get: {
+    list_products_api_v1_products_get: {
         parameters: {
-            query?: never;
+            query?: {
+                product?: string | null;
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1571,17 +1766,178 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_ProductOut_"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
     post_products_api_v1_products_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_ssp_history_api_v1_products__product_id__ssp_history_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                product_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_SspRuleOut_"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_gl_accounts_api_v1_gl_accounts_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_GlAccountOut_"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_gl_accounts_api_v1_gl_accounts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_gl_mappings_api_v1_gl_mappings_get: {
+        parameters: {
+            query?: {
+                product?: string | null;
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_GlMappingOut_"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_gl_mappings_api_v1_gl_mappings_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1621,107 +1977,7 @@ export interface operations {
             };
         };
     };
-    get_products_product_id_ssp_history_api_v1_products__product_id__ssp_history_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_gl_accounts_api_v1_gl_accounts_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    post_gl_accounts_api_v1_gl_accounts_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
     patch_gl_accounts_account_id_api_v1_gl_accounts__account_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_gl_mappings_api_v1_gl_mappings_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    post_gl_mappings_api_v1_gl_mappings_post: {
         parameters: {
             query?: never;
             header?: never;

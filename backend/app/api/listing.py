@@ -9,6 +9,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import Depends, Query
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
@@ -62,6 +63,37 @@ def page_of(db: Session, statement: Select[Any], params: ListParams) -> tuple[li
         statement.offset((params.page - 1) * params.page_size).limit(params.page_size)
     ).all()
     return list(rows), total
+
+
+class Page[Item: BaseModel](BaseModel):
+    items: list[Item]
+    total: int
+    page: int
+    page_size: int
+
+
+def list_response[Item: BaseModel](
+    db: Session,
+    statement: Select[Any],
+    params: ListParams,
+    model: type[Item],
+    filename: str,
+) -> Any:
+    """Answer a list endpoint: one page as JSON, or every row as CSV (§8). The statement's
+    column labels must match the fields of `model`; they also become the CSV header."""
+    if params.format == "csv":
+        return csv_response(
+            filename,
+            list(statement.selected_columns.keys()),
+            db.execute(statement.execution_options(yield_per=1000)),
+        )
+    rows, total = page_of(db, statement, params)
+    return Page[Item](
+        items=[model.model_validate(dict(row._mapping)) for row in rows],
+        total=total,
+        page=params.page,
+        page_size=params.page_size,
+    )
 
 
 _FORMULA_START = ("=", "+", "@", "\t", "\r")
