@@ -1,5 +1,5 @@
-import RoutePlaceholder from "@/components/RoutePlaceholder";
+import { GlSummaryReport } from "@/components/reports/ReportPages";
 
 export default function Page() {
-  return <RoutePlaceholder path="/reports/gl-summary" />;
+  return <GlSummaryReport />;
 }

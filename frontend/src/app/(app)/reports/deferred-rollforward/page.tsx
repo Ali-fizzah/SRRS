@@ -1,5 +1,5 @@
-import RoutePlaceholder from "@/components/RoutePlaceholder";
+import { DeferredRollforwardReport } from "@/components/reports/ReportPages";
 
 export default function Page() {
-  return <RoutePlaceholder path="/reports/deferred-rollforward" />;
+  return <DeferredRollforwardReport />;
 }

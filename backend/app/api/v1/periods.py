@@ -1,13 +1,14 @@
 """Accounting periods, close workflow and engine runs (plan §8 Periods and Engine)."""
 
+from collections.abc import Callable
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.api.errors import ApiError
 from app.api.listing import Listing, Page, apply_sort, list_response
-from app.api.v1.stubs import stub
 from app.audit import write_audit
 from app.auth.deps import CurrentUser, DbSession, get_current_user, require_role
 from app.auth.roles import Role
@@ -15,8 +16,37 @@ from app.jobs.queue import enqueue
 from app.models import AccountingPeriod
 from app.models.enums import JobType, PeriodStatus
 from app.schemas.contracts import JobAccepted, PeriodOut
+from app.schemas.reports import ChecklistItemOut, ChecklistOut, ReopenIn
+from app.services.period_close import (
+    PeriodRuleError,
+    build_checklist,
+    close_period,
+    reopen_period,
+    start_close,
+)
 
 router = APIRouter(prefix="/periods", tags=["periods"])
+
+
+def _guarded[T](action: Callable[[], T]) -> T:
+    """Close rules become the plan §8 error shape."""
+    try:
+        return action()
+    except PeriodRuleError as exc:
+        raise ApiError(exc.status, exc.code, exc.message, exc.details) from exc
+
+
+def checklist_out(db: Session, key: str) -> ChecklistOut:
+    checklist = build_checklist(db, key)
+    return ChecklistOut(
+        period_key=checklist.period_key,
+        status=checklist.status,
+        can_close=not checklist.blocking,
+        items=[
+            ChecklistItemOut(id=i.id, label=i.label, status=i.status, detail=i.detail)
+            for i in checklist.items
+        ],
+    )
 
 
 # §8 lists no role for reading periods; the dashboard shows the current period to everyone.
@@ -46,10 +76,56 @@ def list_periods(db: DbSession, params: Listing, status: PeriodStatus | None = N
     return list_response(db, statement, params, PeriodOut, "periods.csv")
 
 
-stub(router, "GET", "/{key}/checklist", None, "P5-T1")
-stub(router, "POST", "/{key}/start-close", Role.ACCOUNTANT, "P5-T1")
-stub(router, "POST", "/{key}/close", Role.APPROVER, "P5-T1")
-stub(router, "POST", "/{key}/reopen", Role.ADMIN, "P5-T1")
+@router.get(
+    "/{key}/checklist", response_model=ChecklistOut, dependencies=[Depends(get_current_user)]
+)
+def get_checklist(key: str, db: DbSession) -> ChecklistOut:
+    """Plan §5.8, computed live."""
+    return _guarded(lambda: checklist_out(db, key))
+
+
+def _period_out(period: AccountingPeriod) -> PeriodOut:
+    return PeriodOut(
+        id=period.id,
+        period_key=period.period_key,
+        start_date=period.start_date,
+        end_date=period.end_date,
+        status=period.status,
+    )
+
+
+@router.post("/{key}/start-close", response_model=PeriodOut)
+def post_start_close(
+    key: str, db: DbSession, user: Annotated[CurrentUser, Depends(require_role(Role.ACCOUNTANT))]
+) -> PeriodOut:
+    """OPEN -> CLOSING: new uploads are blocked (§5.8)."""
+    out = _period_out(_guarded(lambda: start_close(db, key, user.id)))
+    db.commit()
+    return out
+
+
+@router.post("/{key}/close", response_model=PeriodOut)
+def post_close(
+    key: str, db: DbSession, user: Annotated[CurrentUser, Depends(require_role(Role.APPROVER))]
+) -> PeriodOut:
+    """CLOSING -> CLOSED, then the next period opens. Needs checklist items 1-4 and 6 (§5.8)."""
+    out = _period_out(_guarded(lambda: close_period(db, key, user.id)))
+    db.commit()
+    return out
+
+
+@router.post("/{key}/reopen", response_model=PeriodOut)
+def post_reopen(
+    key: str,
+    body: ReopenIn,
+    db: DbSession,
+    user: Annotated[CurrentUser, Depends(require_role(Role.ADMIN))],
+) -> PeriodOut:
+    """Only the latest CLOSED period, if the next one has no POSTED batch (§5.8)."""
+    out = _period_out(_guarded(lambda: reopen_period(db, key, user.id, body.reason)))
+    db.commit()
+    return out
+
 
 # Engine
 Accountant = Annotated[CurrentUser, Depends(require_role(Role.ACCOUNTANT))]

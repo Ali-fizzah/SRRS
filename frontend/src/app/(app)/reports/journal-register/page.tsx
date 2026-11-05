@@ -1,5 +1,5 @@
-import RoutePlaceholder from "@/components/RoutePlaceholder";
+import { JournalRegisterReport } from "@/components/reports/ReportPages";
 
 export default function Page() {
-  return <RoutePlaceholder path="/reports/journal-register" />;
+  return <JournalRegisterReport />;
 }

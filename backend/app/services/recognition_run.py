@@ -130,7 +130,7 @@ def run_recognition(
 def _generate(db: Session, summary: RunSummary, job_id: int | None, user_id: int | None) -> None:
     """Handle every version still to do, oldest first per contract (§5.5). If a version is
     refused, that contract's later versions wait too: they build on it."""
-    versions = _versions_to_process(db)
+    versions = versions_to_process(db)
     lines_of, rules_of, deliveries_of = _load_inputs(db, [version.id for version, _ in versions])
     blocked: set[str] = set()
     for version, code in versions:
@@ -168,7 +168,7 @@ def _generate(db: Session, summary: RunSummary, job_id: int | None, user_id: int
     db.flush()
 
 
-def _versions_to_process(db: Session) -> list[tuple[ContractVersion, str]]:
+def versions_to_process(db: Session) -> list[tuple[ContractVersion, str]]:
     """NEW, RENEWAL and UPGRADE versions without obligations yet, and CANCELLATION versions whose
     contract still has obligations to stop or versions to build first."""
     older = aliased(ContractVersion)

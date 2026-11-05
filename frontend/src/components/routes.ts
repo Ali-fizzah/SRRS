@@ -123,6 +123,12 @@ export const NAV: NavSection[] = [
         description: "State of each period and its checklist.",
         task: "P5-T5",
       },
+      {
+        path: "/reports/validation-log",
+        title: "Validation log",
+        description: "Every error found in every upload.",
+        task: "P5-T5",
+      },
     ],
   },
 ];

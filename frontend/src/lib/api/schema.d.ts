@@ -548,8 +548,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P5-T1 */
-        get: operations["get_periods_key_checklist_api_v1_periods__key__checklist_get"];
+        /**
+         * Get Checklist
+         * @description Plan §5.8, computed live.
+         */
+        get: operations["get_checklist_api_v1_periods__key__checklist_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -567,8 +570,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Built in P5-T1 */
-        post: operations["post_periods_key_start_close_api_v1_periods__key__start_close_post"];
+        /**
+         * Post Start Close
+         * @description OPEN -> CLOSING: new uploads are blocked (§5.8).
+         */
+        post: operations["post_start_close_api_v1_periods__key__start_close_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -584,8 +590,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Built in P5-T1 */
-        post: operations["post_periods_key_close_api_v1_periods__key__close_post"];
+        /**
+         * Post Close
+         * @description CLOSING -> CLOSED, then the next period opens. Needs checklist items 1-4 and 6 (§5.8).
+         */
+        post: operations["post_close_api_v1_periods__key__close_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -601,8 +610,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Built in P5-T1 */
-        post: operations["post_periods_key_reopen_api_v1_periods__key__reopen_post"];
+        /**
+         * Post Reopen
+         * @description Only the latest CLOSED period, if the next one has no POSTED batch (§5.8).
+         */
+        post: operations["post_reopen_api_v1_periods__key__reopen_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -796,8 +808,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P5-T3 */
-        get: operations["get_reports_revenue_schedule_api_v1_reports_revenue_schedule_get"];
+        /**
+         * Revenue Schedule
+         * @description Revenue per contract line per month, by service period. Superseded lines are left out.
+         */
+        get: operations["revenue_schedule_api_v1_reports_revenue_schedule_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -813,8 +828,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P5-T3 */
-        get: operations["get_reports_deferred_rollforward_api_v1_reports_deferred_rollforward_get"];
+        /**
+         * Deferred Rollforward
+         * @description Plan §5.6, from the sub-ledger. `group_by=contract` needs a period range: it is the
+         *     drill-down from one month's figures to the contracts behind them.
+         */
+        get: operations["deferred_rollforward_api_v1_reports_deferred_rollforward_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -830,8 +849,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P5-T3 */
-        get: operations["get_reports_recognized_vs_deferred_api_v1_reports_recognized_vs_deferred_get"];
+        /**
+         * Recognized Vs Deferred
+         * @description Monthly recognised revenue and the balances at each month end (plan §9 Trend).
+         */
+        get: operations["recognized_vs_deferred_api_v1_reports_recognized_vs_deferred_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -847,8 +869,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P5-T3 */
-        get: operations["get_reports_journal_register_api_v1_reports_journal_register_get"];
+        /**
+         * Journal Register
+         * @description All journal lines by period, status and account (plan §9).
+         */
+        get: operations["journal_register_api_v1_reports_journal_register_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -864,8 +889,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P5-T3 */
-        get: operations["get_reports_gl_summary_api_v1_reports_gl_summary_get"];
+        /**
+         * Gl Summary
+         * @description Debit, credit and net per account per period. Posted batches unless asked otherwise.
+         */
+        get: operations["gl_summary_api_v1_reports_gl_summary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -881,8 +909,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P5-T3 */
-        get: operations["get_reports_mrr_arr_api_v1_reports_mrr_arr_get"];
+        /**
+         * Mrr Arr
+         * @description Plan §5.9. Non-GAAP: always shown apart from recognised revenue.
+         */
+        get: operations["mrr_arr_api_v1_reports_mrr_arr_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -898,8 +929,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P5-T3 */
-        get: operations["get_reports_close_status_api_v1_reports_close_status_get"];
+        /**
+         * Close Status
+         * @description State of each period; the checklist of the current one is computed live (§5.8).
+         */
+        get: operations["close_status_api_v1_reports_close_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -915,8 +949,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P5-T3 */
-        get: operations["get_reports_validation_log_api_v1_reports_validation_log_get"];
+        /**
+         * Validation Log
+         * @description Every validation error of every upload (plan §7.1).
+         */
+        get: operations["validation_log_api_v1_reports_validation_log_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -953,6 +990,58 @@ export interface components {
         Body_create_upload_api_v1_uploads_post: {
             /** Files */
             files: string[];
+        };
+        /** ChecklistItemOut */
+        ChecklistItemOut: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "warn" | "fail";
+            /** Detail */
+            detail: string;
+        };
+        /** ChecklistOut */
+        ChecklistOut: {
+            /** Period Key */
+            period_key: string;
+            status: components["schemas"]["PeriodStatus"];
+            /** Can Close */
+            can_close: boolean;
+            /** Items */
+            items: components["schemas"]["ChecklistItemOut"][];
+        };
+        /** CloseStatusPage */
+        CloseStatusPage: {
+            /** Items */
+            items: components["schemas"]["CloseStatusRow"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            current: components["schemas"]["ChecklistOut"] | null;
+        };
+        /** CloseStatusRow */
+        CloseStatusRow: {
+            /** Id */
+            id: number;
+            /** Period Key */
+            period_key: string;
+            status: components["schemas"]["PeriodStatus"];
+            /** Closed By Name */
+            closed_by_name: string | null;
+            /** Closed At */
+            closed_at: string | null;
+            /** Batches */
+            batches: number;
+            /** Posted Batches */
+            posted_batches: number;
         };
         /**
          * ColumnType
@@ -1171,6 +1260,23 @@ export interface components {
             /** Account Name */
             account_name: string;
         };
+        /** GlSummaryRow */
+        GlSummaryRow: {
+            /** Id */
+            id: number;
+            /** Period Key */
+            period_key: string;
+            /** Account Code */
+            account_code: string;
+            /** Account Name */
+            account_name: string;
+            /** Debit */
+            debit: string;
+            /** Credit */
+            credit: string;
+            /** Net */
+            net: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1334,12 +1440,61 @@ export interface components {
             /** Can Reverse */
             can_reverse: boolean;
         };
+        /** JournalRegisterRow */
+        JournalRegisterRow: {
+            /** Id */
+            id: number;
+            /** Period Key */
+            period_key: string;
+            /** Batch Id */
+            batch_id: number;
+            /** Batch No */
+            batch_no: number;
+            batch_status: components["schemas"]["BatchStatus"];
+            /** Entry Id */
+            entry_id: number;
+            entry_type: components["schemas"]["JournalEntryType"];
+            /**
+             * Entry Date
+             * Format: date
+             */
+            entry_date: string;
+            /** Contract Id */
+            contract_id: number;
+            /** Contract Code */
+            contract_code: string;
+            /** Customer Name */
+            customer_name: string;
+            /** Account Code */
+            account_code: string;
+            /** Account Name */
+            account_name: string;
+            /** Debit */
+            debit: string;
+            /** Credit */
+            credit: string;
+            /** Product Code */
+            product_code: string | null;
+            /** Description */
+            description: string | null;
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Email */
             email: string;
             /** Password */
             password: string;
+        };
+        /** MrrArrRow */
+        MrrArrRow: {
+            /** Id */
+            id: number;
+            /** Period */
+            period: string;
+            /** Mrr */
+            mrr: string;
+            /** Arr */
+            arr: string;
         };
         /** ObligationOut */
         ObligationOut: {
@@ -1417,6 +1572,17 @@ export interface components {
             /** Page Size */
             page_size: number;
         };
+        /** Page[GlSummaryRow] */
+        Page_GlSummaryRow_: {
+            /** Items */
+            items: components["schemas"]["GlSummaryRow"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
         /** Page[JournalBatchOut] */
         Page_JournalBatchOut_: {
             /** Items */
@@ -1432,6 +1598,28 @@ export interface components {
         Page_JournalLineOut_: {
             /** Items */
             items: components["schemas"]["JournalLineOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** Page[JournalRegisterRow] */
+        Page_JournalRegisterRow_: {
+            /** Items */
+            items: components["schemas"]["JournalRegisterRow"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** Page[MrrArrRow] */
+        Page_MrrArrRow_: {
+            /** Items */
+            items: components["schemas"]["MrrArrRow"][];
             /** Total */
             total: number;
             /** Page */
@@ -1461,6 +1649,28 @@ export interface components {
             /** Page Size */
             page_size: number;
         };
+        /** Page[RecognizedVsDeferredRow] */
+        Page_RecognizedVsDeferredRow_: {
+            /** Items */
+            items: components["schemas"]["RecognizedVsDeferredRow"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** Page[RollforwardRow] */
+        Page_RollforwardRow_: {
+            /** Items */
+            items: components["schemas"]["RollforwardRow"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
         /** Page[SourceRowOut] */
         Page_SourceRowOut_: {
             /** Items */
@@ -1476,6 +1686,17 @@ export interface components {
         Page_SspRuleOut_: {
             /** Items */
             items: components["schemas"]["SspRuleOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** Page[ValidationLogRow] */
+        Page_ValidationLogRow_: {
+            /** Items */
+            items: components["schemas"]["ValidationLogRow"][];
             /** Total */
             total: number;
             /** Page */
@@ -1565,6 +1786,64 @@ export interface components {
          * @enum {string}
          */
         RecognitionMethod: "RATABLE_DAILY" | "RATABLE_MONTHLY" | "POINT_IN_TIME";
+        /** RecognizedVsDeferredRow */
+        RecognizedVsDeferredRow: {
+            /** Id */
+            id: number;
+            /** Period */
+            period: string;
+            /** Recognised */
+            recognised: string;
+            /** Deferred */
+            deferred: string;
+            /** Unbilled */
+            unbilled: string;
+        };
+        /** ReopenIn */
+        ReopenIn: {
+            /** Reason */
+            reason: string;
+        };
+        /** RevenueSchedulePage */
+        RevenueSchedulePage: {
+            /** Items */
+            items: components["schemas"]["RevenueScheduleRow"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total Amount */
+            total_amount: string;
+        };
+        /** RevenueScheduleRow */
+        RevenueScheduleRow: {
+            /** Id */
+            id: number;
+            /** Contract Id */
+            contract_id: number;
+            /** Contract Code */
+            contract_code: string;
+            /** Customer Name */
+            customer_name: string;
+            /** Version No */
+            version_no: number;
+            /** Line No */
+            line_no: number;
+            /** Product Code */
+            product_code: string;
+            method: components["schemas"]["RecognitionMethod"];
+            /** Service Period */
+            service_period: string;
+            /** Posting Period */
+            posting_period: string | null;
+            /** Is Catch Up */
+            is_catch_up: boolean;
+            /** Amount */
+            amount: string;
+            status: components["schemas"]["ScheduleLineStatus"];
+        };
         /** ReverseIn */
         ReverseIn: {
             /** Reason */
@@ -1580,6 +1859,42 @@ export interface components {
          * @enum {string}
          */
         Role: "UPLOADER" | "ACCOUNTANT" | "APPROVER" | "ADMIN";
+        /**
+         * RollforwardRow
+         * @description §5.6: opening + billings - credit notes + reversals - cleared - recognised = closing.
+         */
+        RollforwardRow: {
+            /** Id */
+            id: number;
+            /** Period */
+            period: string;
+            /** Contract Id */
+            contract_id?: number | null;
+            /** Contract Code */
+            contract_code?: string | null;
+            /** Customer Name */
+            customer_name?: string | null;
+            /** Opening Deferred */
+            opening_deferred: string;
+            /** Billings */
+            billings: string;
+            /** Billed To Unbilled */
+            billed_to_unbilled: string;
+            /** Credit Notes */
+            credit_notes: string;
+            /** Adjustments */
+            adjustments: string;
+            /** Recognised From Deferred */
+            recognised_from_deferred: string;
+            /** Closing Deferred */
+            closing_deferred: string;
+            /** Opening Unbilled */
+            opening_unbilled: string;
+            /** Closing Unbilled */
+            closing_unbilled: string;
+            /** Recognised */
+            recognised: string;
+        };
         /** ScheduleLineOut */
         ScheduleLineOut: {
             /** Id */
@@ -1840,6 +2155,27 @@ export interface components {
             page: number;
             /** Page Size */
             page_size: number;
+        };
+        /** ValidationLogRow */
+        ValidationLogRow: {
+            /** Id */
+            id: number;
+            /** Upload Id */
+            upload_id: number;
+            /** Filename */
+            filename: string;
+            /** Period Key */
+            period_key: string;
+            /** Row Number */
+            row_number: number;
+            /** Column Name */
+            column_name: string | null;
+            /** Error Code */
+            error_code: string;
+            /** Message */
+            message: string;
+            /** Raw Value */
+            raw_value: string | null;
         };
         /** VersionDetailOut */
         VersionDetailOut: {
@@ -2917,82 +3253,130 @@ export interface operations {
             };
         };
     };
-    get_periods_key_checklist_api_v1_periods__key__checklist_get: {
+    get_checklist_api_v1_periods__key__checklist_get: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                key: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ChecklistOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    post_periods_key_start_close_api_v1_periods__key__start_close_post: {
+    post_start_close_api_v1_periods__key__start_close_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                key: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PeriodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    post_periods_key_close_api_v1_periods__key__close_post: {
+    post_close_api_v1_periods__key__close_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                key: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PeriodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    post_periods_key_reopen_api_v1_periods__key__reopen_post: {
+    post_reopen_api_v1_periods__key__reopen_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                key: string;
+            };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReopenIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PeriodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3299,9 +3683,21 @@ export interface operations {
             };
         };
     };
-    get_reports_revenue_schedule_api_v1_reports_revenue_schedule_get: {
+    revenue_schedule_api_v1_reports_revenue_schedule_get: {
         parameters: {
-            query?: never;
+            query?: {
+                period_from?: string | null;
+                period_to?: string | null;
+                customer?: string | null;
+                contract?: string | null;
+                product?: string | null;
+                status?: components["schemas"]["ScheduleLineStatus"] | null;
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3309,19 +3705,41 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RevenueSchedulePage"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    get_reports_deferred_rollforward_api_v1_reports_deferred_rollforward_get: {
+    deferred_rollforward_api_v1_reports_deferred_rollforward_get: {
         parameters: {
-            query?: never;
+            query?: {
+                period_from?: string | null;
+                period_to?: string | null;
+                customer?: string | null;
+                contract?: string | null;
+                product?: string | null;
+                group_by?: string;
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3329,19 +3747,40 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_RollforwardRow_"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    get_reports_recognized_vs_deferred_api_v1_reports_recognized_vs_deferred_get: {
+    recognized_vs_deferred_api_v1_reports_recognized_vs_deferred_get: {
         parameters: {
-            query?: never;
+            query?: {
+                period_from?: string | null;
+                period_to?: string | null;
+                customer?: string | null;
+                contract?: string | null;
+                product?: string | null;
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3349,19 +3788,43 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_RecognizedVsDeferredRow_"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    get_reports_journal_register_api_v1_reports_journal_register_get: {
+    journal_register_api_v1_reports_journal_register_get: {
         parameters: {
-            query?: never;
+            query?: {
+                period_from?: string | null;
+                period_to?: string | null;
+                customer?: string | null;
+                contract?: string | null;
+                product?: string | null;
+                account?: string | null;
+                status?: components["schemas"]["BatchStatus"] | null;
+                entry_type?: components["schemas"]["JournalEntryType"] | null;
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3369,19 +3832,41 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_JournalRegisterRow_"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    get_reports_gl_summary_api_v1_reports_gl_summary_get: {
+    gl_summary_api_v1_reports_gl_summary_get: {
         parameters: {
-            query?: never;
+            query?: {
+                period_from?: string | null;
+                period_to?: string | null;
+                customer?: string | null;
+                contract?: string | null;
+                product?: string | null;
+                status?: components["schemas"]["BatchStatus"];
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3389,19 +3874,40 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_GlSummaryRow_"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    get_reports_mrr_arr_api_v1_reports_mrr_arr_get: {
+    mrr_arr_api_v1_reports_mrr_arr_get: {
         parameters: {
-            query?: never;
+            query?: {
+                period_from?: string | null;
+                period_to?: string | null;
+                customer?: string | null;
+                contract?: string | null;
+                product?: string | null;
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3409,19 +3915,37 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_MrrArrRow_"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    get_reports_close_status_api_v1_reports_close_status_get: {
+    close_status_api_v1_reports_close_status_get: {
         parameters: {
-            query?: never;
+            query?: {
+                period_from?: string | null;
+                period_to?: string | null;
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3429,19 +3953,38 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CloseStatusPage"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    get_reports_validation_log_api_v1_reports_validation_log_get: {
+    validation_log_api_v1_reports_validation_log_get: {
         parameters: {
-            query?: never;
+            query?: {
+                period_from?: string | null;
+                period_to?: string | null;
+                code?: string | null;
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3449,12 +3992,22 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_ValidationLogRow_"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

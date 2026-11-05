@@ -495,6 +495,34 @@ def reversal_effects(db: Session, contract_id: int) -> dict[str, int]:
     return effects
 
 
+def all_reversal_effects(
+    db: Session, contract_ids: Sequence[int] | None = None
+) -> dict[int, dict[str, int]]:
+    """reversal_effects for many contracts: {contract: {period: cents}}."""
+    effects: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    statement = (
+        _entry_totals()
+        .add_columns(AccountingPeriod.period_key)
+        .join(AccountingPeriod, AccountingPeriod.id == JournalBatch.period_id)
+        .where(JournalEntry.entry_type == JournalEntryType.REVERSAL)
+        .group_by(AccountingPeriod.period_key)
+    )
+    if contract_ids is not None:
+        statement = statement.where(JournalEntry.contract_id.in_(contract_ids))
+    for row in db.execute(statement):
+        effects[row.contract_id][row.period_key] += _effect_of(row)
+    return effects
+
+
+def unbooked_count(db: Session, period: str) -> int:
+    """How many documents and schedule lines due by this period are in no batch (§5.8)."""
+    documents, _ = _unbooked_documents(db, period)
+    revenue = _unbooked_revenue(db, period)
+    return sum(1 for rows in documents.values() for document in rows if document.amount != 0) + sum(
+        len(rows) for rows in revenue.values()
+    )
+
+
 def _entry_totals() -> Select[Any]:
     reversed_entry = aliased(JournalEntry)
     revenue_net = func.sum(JournalLine.credit - JournalLine.debit).filter(
@@ -818,19 +846,22 @@ def _require_status(batch: JournalBatch, expected: BatchStatus, action: str) -> 
         )
 
 
-def _require_period_not_closed(db: Session, batch: JournalBatch) -> None:
+def _require_current_period(db: Session, batch: JournalBatch) -> None:
+    """A reopen can leave a batch in a period that is FUTURE again, and a CLOSED one is history."""
     status = db.scalar(
         select(AccountingPeriod.status).where(AccountingPeriod.id == batch.period_id)
     )
-    if status == PeriodStatus.CLOSED:
-        raise JournalRuleError(409, "PERIOD_CLOSED", "This batch's period is closed.")
+    if status not in (PeriodStatus.OPEN, PeriodStatus.CLOSING):
+        raise JournalRuleError(
+            409, "PERIOD_NOT_CURRENT", "This batch's period is not the current period."
+        )
 
 
 def approve_batch(db: Session, batch_id: int, user_id: int) -> JournalBatch:
     """§5.7, D13: the user who generated a batch cannot approve it (setting, on by default)."""
     batch = _locked_batch(db, batch_id)
     _require_status(batch, BatchStatus.DRAFT, "approved")
-    _require_period_not_closed(db, batch)
+    _require_current_period(db, batch)
     if get_settings().segregation_of_duties and batch.generated_by == user_id:
         raise JournalRuleError(
             403,
@@ -881,7 +912,7 @@ def post_batch(db: Session, batch_id: int, user_id: int) -> JournalBatch:
     """§5.7: POSTED is read-only from here on; the database enforces that (§6.3)."""
     batch = _locked_batch(db, batch_id)
     _require_status(batch, BatchStatus.APPROVED, "posted")
-    _require_period_not_closed(db, batch)
+    _require_current_period(db, batch)
     entries = select(JournalEntry.id).where(JournalEntry.batch_id == batch.id)
     lines = select(JournalLine.id).where(JournalLine.entry_id.in_(entries))
     posted_lines = db.execute(

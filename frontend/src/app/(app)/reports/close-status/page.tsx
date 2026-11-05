@@ -1,5 +1,5 @@
-import RoutePlaceholder from "@/components/RoutePlaceholder";
+import { CloseStatusReport } from "@/components/reports/ReportPages";
 
 export default function Page() {
-  return <RoutePlaceholder path="/reports/close-status" />;
+  return <CloseStatusReport />;
 }

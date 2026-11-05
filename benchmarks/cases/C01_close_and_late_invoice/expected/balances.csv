@@ -1,0 +1,4 @@
+period,contract_id,deferred,unbilled
+202501,C01-A,0.00,100.00
+202502,C01-A,1000.00,0.00
+202502,C01-B,0.00,400.00

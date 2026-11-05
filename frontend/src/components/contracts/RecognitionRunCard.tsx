@@ -11,7 +11,8 @@ import Typography from "@mui/material/Typography";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-import { apiGet, postRecognitionRun, type Schemas } from "@/lib/api/client";
+import { postRecognitionRun } from "@/lib/api/client";
+import { useCurrentPeriod } from "@/lib/api/useCurrentPeriod";
 import { isJobFinished, useJob } from "@/lib/api/useJob";
 import { formatPeriod } from "@/lib/format";
 import { fetchMe } from "@/lib/session";
@@ -60,12 +61,8 @@ const MAY_RUN = new Set(["ACCOUNTANT", "APPROVER", "ADMIN"]); // plan §8 Engine
 export default function RecognitionRunCard() {
   const queryClient = useQueryClient();
   const me = useQuery({ queryKey: ["me"], queryFn: fetchMe, staleTime: Infinity });
-  const period = useQuery({
-    queryKey: ["/periods", "OPEN"],
-    queryFn: () =>
-      apiGet<{ items: Schemas["PeriodOut"][] }>("/periods", { status: "OPEN", page_size: 1 }),
-  });
-  const current = period.data?.items[0]?.period_key;
+  const period = useCurrentPeriod();
+  const current = period.data?.period_key;
 
   const run = useMutation({ mutationFn: postRecognitionRun });
   const job = useJob(run.data?.job_id);

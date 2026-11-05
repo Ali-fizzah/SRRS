@@ -36,6 +36,8 @@ class PeriodBalance:
     # Posted reversal entries (§5.7): + raises the position, - lowers it. It keeps this rollforward
     # equal to the GL, because a reversal changes the GL but not the billing documents or schedule.
     adjustments: int = 0
+    # The part of billings that cleared unbilled (§5.6), so it never reached deferred revenue.
+    billed_to_unbilled: int = 0
 
 
 def roll_forward(
@@ -44,7 +46,7 @@ def roll_forward(
     adjustments_by_period: Mapping[str, int] | None = None,
 ) -> list[PeriodBalance]:
     """One row per period with activity:
-    opening + billings - credit notes + adjustments - recognised = closing.
+    opening + billings - cleared + adjustments - credit notes - recognised = closing.
 
     The whole calculation is one running figure, billed minus recognised: positive is deferred
     revenue, negative is unbilled. It gives the §5.6 rules directly: an invoice clears unbilled
@@ -72,6 +74,17 @@ def roll_forward(
         before_revenue = position
         recognised = revenue_by_period.get(period, 0)
         position -= recognised
+        recognised_from_deferred = max(before_revenue, 0) - max(position, 0)
+        adjustment = adjustments.get(period, 0)
+        # Whatever else moved the deferred balance in the period went to or from unbilled.
+        billed_to_unbilled = (
+            max(opening, 0)
+            + billings
+            - credit_notes
+            + adjustment
+            - recognised_from_deferred
+            - max(position, 0)
+        )
         rows.append(
             PeriodBalance(
                 period=period,
@@ -80,11 +93,12 @@ def roll_forward(
                 billings=billings,
                 credit_notes=credit_notes,
                 recognised=recognised,
-                recognised_from_deferred=max(before_revenue, 0) - max(position, 0),
+                recognised_from_deferred=recognised_from_deferred,
                 closing_deferred=max(position, 0),
                 closing_unbilled=max(-position, 0),
                 credit_excess=credit_excess,
-                adjustments=adjustments.get(period, 0),
+                adjustments=adjustment,
+                billed_to_unbilled=billed_to_unbilled,
             )
         )
     return rows

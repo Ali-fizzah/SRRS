@@ -1,10 +1,9 @@
 """Golden-case replay (plan §11.2, task P3-T7).
 
 Replays a case month by month as a user would: open period -> upload that month's files ->
-recognition run -> generate journals -> approve -> post -> next month, then compares the results
-with expected/. postings.csv is compared with the posted journal lines themselves.
-
-Close joins the replay in Phase 5; until then the runner moves the period on itself.
+recognition run -> generate journals -> approve -> post -> close -> next month, then compares the
+results with expected/. postings.csv is compared with the posted journal lines themselves. Each
+month goes through the real close, so its checklist has to pass, including the GL tie-out (P5-T2).
 """
 
 from collections import defaultdict
@@ -52,6 +51,7 @@ from app.models.enums import (
 )
 from app.services.billing import balance_at, contract_balances
 from app.services.journals import approve_batch, generate_journals, post_batch
+from app.services.period_close import PeriodRuleError, close_period, start_close
 from app.services.recognition_run import run_recognition
 
 Key = tuple[str, ...]
@@ -124,6 +124,19 @@ def _upload_month(db: Session, folder: Path, period: str, user_id: int, result: 
                 f"{period} {summary.template.value}: {summary.status.value}, "
                 f"{summary.rejected_rows} rejected"
             )
+
+
+def _close_month(
+    db: Session, period: str, user_id: int, approver_id: int, result: CaseResult
+) -> None:
+    """Plan §5.8. A month that cannot close is a problem for the report; the replay still moves
+    on, so the comparison shows everything that is wrong, not only the first month."""
+    start_close(db, period, user_id)
+    try:
+        close_period(db, period, approver_id)
+    except PeriodRuleError as refused:
+        result.problems.append(f"{period} did not close: {refused.message}")
+        _advance(db, period)
 
 
 def _advance(db: Session, period: str) -> None:
@@ -225,8 +238,7 @@ def replay(db: Session, case_dir: Path, seed: Any, user_factory: Any) -> CaseRes
                 key = (period, row["contract_id"])
                 actual_balances[(*key, "deferred")] = from_cents(deferred)
                 actual_balances[(*key, "unbilled")] = from_cents(unbilled)
-        if period != last:
-            _advance(db, period)
+        _close_month(db, period, user_id, approver_id, result)
 
     _compare_allocation(db, case_dir, result)
     lines = _actual_lines(db)

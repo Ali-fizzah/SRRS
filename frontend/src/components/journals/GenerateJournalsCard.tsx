@@ -13,7 +13,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import NextLink from "next/link";
 import { useEffect } from "react";
 
-import { apiGet, apiPost, type Schemas } from "@/lib/api/client";
+import { apiPost, type Schemas } from "@/lib/api/client";
+import { useCurrentPeriod } from "@/lib/api/useCurrentPeriod";
 import { isJobFinished, useJob } from "@/lib/api/useJob";
 import { formatMoney, formatPeriod } from "@/lib/format";
 import { fetchMe } from "@/lib/session";
@@ -33,12 +34,8 @@ const MAY_GENERATE = new Set(["ACCOUNTANT", "APPROVER", "ADMIN"]); // plan §8 E
 export default function GenerateJournalsCard() {
   const queryClient = useQueryClient();
   const me = useQuery({ queryKey: ["me"], queryFn: fetchMe, staleTime: Infinity });
-  const period = useQuery({
-    queryKey: ["/periods", "OPEN"],
-    queryFn: () =>
-      apiGet<{ items: Schemas["PeriodOut"][] }>("/periods", { status: "OPEN", page_size: 1 }),
-  });
-  const current = period.data?.items[0]?.period_key;
+  const period = useCurrentPeriod();
+  const current = period.data?.period_key;
 
   const run = useMutation({
     mutationFn: (key: string) =>
