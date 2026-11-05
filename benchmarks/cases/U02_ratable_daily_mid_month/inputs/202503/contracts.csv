@@ -1,0 +1,2 @@
+contract_id,customer_id,start_date,end_date,event_type,effective_date
+U02,CUST-U02,2025-03-15,2026-03-14,NEW,2025-03-15

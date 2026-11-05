@@ -219,7 +219,8 @@ def test_schedule_lists_the_lines_and_totals_every_page(
     )  # fmt: skip
     assert (first["version_no"], first["line_no"], first["product_code"]) == (1, 1, "SUB")
     assert first["method"] == "RATABLE_MONTHLY"
-    assert first["posting_period"] is None and first["is_catch_up"] is False
+    assert first["posting_period"] == "202501" and first["is_catch_up"] is False  # §5.4
+    assert body["items"][1]["posting_period"] is None  # February is still in the future
 
 
 def test_b01_schedule_through_the_api(api: TestClient, db: Session, user_id: int) -> None:
@@ -341,18 +342,13 @@ def test_upload_run_and_schedule_end_to_end(stack: TestClient, committed: Factor
     assert (job["status"], job["progress"], job["error"]) == ("DONE", 100, None)
     result = job["result"]
     assert result["period_key"] == "202501"
-    assert (result["contracts_generated"], result["obligations_created"]) == (1, 1)
-    assert result["schedule_lines_created"] == 12
-    assert result["skipped"] == [
-        {
-            "contract_code": "LATER",
-            "reason": "UNSUPPORTED_METHOD",
-            "message": "RATABLE_DAILY schedules are built in task P3-T3.",
-        }
-    ]
+    assert (result["contracts_generated"], result["obligations_created"]) == (2, 2)
+    assert result["schedule_lines_created"] == 12 + 11  # LATER is daily, Feb to Dec
+    assert result["skipped"] == []
+    assert (result["lines_booked"], result["catch_up_lines"]) == (1, 0)  # only January is due
 
     listed = {c["contract_code"]: c for c in stack.get("/api/v1/contracts").json()["items"]}
-    assert listed["U01"]["has_schedule"] is True and listed["LATER"]["has_schedule"] is False
+    assert listed["U01"]["has_schedule"] is True and listed["LATER"]["has_schedule"] is True
     schedule = stack.get(f"/api/v1/contracts/{listed['U01']['id']}/schedule").json()
     assert schedule["total"] == 12 and schedule["total_amount"] == "1200.00"
 

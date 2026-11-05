@@ -410,9 +410,69 @@ export interface paths {
         };
         /**
          * Get Contract
-         * @description One contract with its current version; versions, lines and POs arrive in task P3-T6.
+         * @description One contract: its current version and the list of all its versions (§5.5).
          */
         get: operations["get_contract_api_v1_contracts__contract_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contracts/{contract_id}/versions/{version_no}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Contract Version
+         * @description One version with its lines, obligations + allocation, and deliveries.
+         */
+        get: operations["get_contract_version_api_v1_contracts__contract_id__versions__version_no__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contracts/{contract_id}/billing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Contract Billing
+         * @description Invoices, credit notes and the deferred / unbilled rollforward (plan §5.6).
+         */
+        get: operations["get_contract_billing_api_v1_contracts__contract_id__billing_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contracts/{contract_id}/source-rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Source Rows
+         * @description Every uploaded row behind this contract, as it was in the file (CLAUDE.md rule 5).
+         */
+        get: operations["list_source_rows_api_v1_contracts__contract_id__source_rows_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -441,40 +501,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/contracts/{contract_id}/versions/{version_no}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Built in P3-T6 */
-        get: operations["get_contracts_contract_id_versions_version_no_api_v1_contracts__contract_id__versions__version_no__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/contracts/{contract_id}/billing": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Built in P3-T6 */
-        get: operations["get_contracts_contract_id_billing_api_v1_contracts__contract_id__billing_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/contracts/{contract_id}/journal-lines": {
         parameters: {
             query?: never;
@@ -484,23 +510,6 @@ export interface paths {
         };
         /** Built in P4-T4 */
         get: operations["get_contracts_contract_id_journal_lines_api_v1_contracts__contract_id__journal_lines_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/contracts/{contract_id}/source-rows": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Built in P3-T6 */
-        get: operations["get_contracts_contract_id_source_rows_api_v1_contracts__contract_id__source_rows_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -921,11 +930,95 @@ export interface components {
          * @enum {string}
          */
         ColumnType: "TEXT" | "INTEGER" | "DECIMAL" | "MONEY" | "DATE" | "CHOICE" | "YES_NO";
+        /** ContractBillingOut */
+        ContractBillingOut: {
+            /** Invoices */
+            invoices: components["schemas"]["InvoiceOut"][];
+            /** Credit Notes */
+            credit_notes: components["schemas"]["CreditNoteOut"][];
+            /** Balances */
+            balances: components["schemas"]["PeriodBalanceOut"][];
+            /** Deferred */
+            deferred: string;
+            /** Unbilled */
+            unbilled: string;
+        };
+        /** ContractDetailOut */
+        ContractDetailOut: {
+            /** Id */
+            id: number;
+            /** Contract Code */
+            contract_code: string;
+            /** Customer Code */
+            customer_code: string;
+            /** Customer Name */
+            customer_name: string;
+            status: components["schemas"]["ContractStatus"];
+            /** Current Version No */
+            current_version_no: number;
+            event_type: components["schemas"]["ContractEventType"];
+            /**
+             * Effective Date
+             * Format: date
+             */
+            effective_date: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Transaction Price */
+            transaction_price: string;
+            /** Booked Period */
+            booked_period: string;
+            /** Has Schedule */
+            has_schedule: boolean;
+            /** Versions */
+            versions: components["schemas"]["VersionSummaryOut"][];
+        };
         /**
          * ContractEventType
          * @enum {string}
          */
         ContractEventType: "NEW" | "RENEWAL" | "CANCELLATION" | "UPGRADE";
+        /** ContractLineOut */
+        ContractLineOut: {
+            /** Id */
+            id: number;
+            /** Line No */
+            line_no: number;
+            /** Product Code */
+            product_code: string;
+            /** Product Name */
+            product_name: string;
+            /** Is Separate Obligation */
+            is_separate_obligation: boolean;
+            /** Quantity */
+            quantity: string;
+            /** Unit Price */
+            unit_price: string;
+            /** Discount */
+            discount: string;
+            /** Net Price */
+            net_price: string;
+            /**
+             * Service Start
+             * Format: date
+             */
+            service_start: string;
+            /**
+             * Service End
+             * Format: date
+             */
+            service_end: string;
+            /** Completion Date */
+            completion_date: string | null;
+        };
         /**
          * ContractOut
          * @description A contract with the fields of its current version.
@@ -970,6 +1063,22 @@ export interface components {
          * @enum {string}
          */
         ContractStatus: "ACTIVE" | "CANCELLED" | "EXPIRED";
+        /** CreditNoteOut */
+        CreditNoteOut: {
+            /** Credit Note Number */
+            credit_note_number: string;
+            /** Invoice Number */
+            invoice_number: string;
+            /**
+             * Credit Date
+             * Format: date
+             */
+            credit_date: string;
+            /** Amount */
+            amount: string;
+            /** Reason */
+            reason: string;
+        };
         /** CustomerOut */
         CustomerOut: {
             /** Id */
@@ -984,6 +1093,20 @@ export interface components {
             source_upload_id: number | null;
             /** Source Row */
             source_row: number | null;
+        };
+        /** DeliveryOut */
+        DeliveryOut: {
+            /** Delivery Code */
+            delivery_code: string;
+            /** Line No */
+            line_no: number;
+            /**
+             * Delivery Date
+             * Format: date
+             */
+            delivery_date: string;
+            /** Units Fraction */
+            units_fraction: string;
         };
         /** GlAccountOut */
         GlAccountOut: {
@@ -1023,6 +1146,18 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** InvoiceOut */
+        InvoiceOut: {
+            /** Invoice Number */
+            invoice_number: string;
+            /**
+             * Invoice Date
+             * Format: date
+             */
+            invoice_date: string;
+            /** Total Amount */
+            total_amount: string;
         };
         /** JobAccepted */
         JobAccepted: {
@@ -1070,6 +1205,38 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** ObligationOut */
+        ObligationOut: {
+            /** Id */
+            id: number;
+            /** Line No */
+            line_no: number;
+            /** Product Code */
+            product_code: string;
+            method: components["schemas"]["RecognitionMethod"];
+            /** Ssp Amount */
+            ssp_amount: string;
+            /** Allocated Amount */
+            allocated_amount: string;
+            /**
+             * Service Start
+             * Format: date
+             */
+            service_start: string;
+            /**
+             * Service End
+             * Format: date
+             */
+            service_end: string;
+            /** Completion Date */
+            completion_date: string | null;
+            status: components["schemas"]["ObligationStatus"];
+        };
+        /**
+         * ObligationStatus
+         * @enum {string}
+         */
+        ObligationStatus: "ACTIVE" | "SUPERSEDED" | "SATISFIED";
         /** Page[ContractOut] */
         Page_ContractOut_: {
             /** Items */
@@ -1136,6 +1303,17 @@ export interface components {
             /** Page Size */
             page_size: number;
         };
+        /** Page[SourceRowOut] */
+        Page_SourceRowOut_: {
+            /** Items */
+            items: components["schemas"]["SourceRowOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
         /** Page[SspRuleOut] */
         Page_SspRuleOut_: {
             /** Items */
@@ -1146,6 +1324,30 @@ export interface components {
             page: number;
             /** Page Size */
             page_size: number;
+        };
+        /**
+         * PeriodBalanceOut
+         * @description Plan §5.6: opening + billings - credit notes - recognised (from deferred) = closing.
+         */
+        PeriodBalanceOut: {
+            /** Period */
+            period: string;
+            /** Opening Deferred */
+            opening_deferred: string;
+            /** Opening Unbilled */
+            opening_unbilled: string;
+            /** Billings */
+            billings: string;
+            /** Credit Notes */
+            credit_notes: string;
+            /** Recognised */
+            recognised: string;
+            /** Recognised From Deferred */
+            recognised_from_deferred: string;
+            /** Closing Deferred */
+            closing_deferred: string;
+            /** Closing Unbilled */
+            closing_unbilled: string;
         };
         /** PeriodOut */
         PeriodOut: {
@@ -1246,6 +1448,26 @@ export interface components {
             page_size: number;
             /** Total Amount */
             total_amount: string;
+        };
+        /**
+         * SourceRowOut
+         * @description A row as it was uploaded (CLAUDE.md rule 5), the end point of the drill-down (§9).
+         */
+        SourceRowOut: {
+            /** Id */
+            id: number;
+            /** Record Type */
+            record_type: string;
+            /** Upload Id */
+            upload_id: number;
+            /** Filename */
+            filename: string;
+            /** Source Row */
+            source_row: number | null;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            } | null;
         };
         /** SspRuleOut */
         SspRuleOut: {
@@ -1443,6 +1665,62 @@ export interface components {
             page: number;
             /** Page Size */
             page_size: number;
+        };
+        /** VersionDetailOut */
+        VersionDetailOut: {
+            /** Version No */
+            version_no: number;
+            event_type: components["schemas"]["ContractEventType"];
+            /**
+             * Effective Date
+             * Format: date
+             */
+            effective_date: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Transaction Price */
+            transaction_price: string;
+            /** Booked Period */
+            booked_period: string;
+            /** Lines */
+            lines: components["schemas"]["ContractLineOut"][];
+            /** Obligations */
+            obligations: components["schemas"]["ObligationOut"][];
+            /** Deliveries */
+            deliveries: components["schemas"]["DeliveryOut"][];
+        };
+        /** VersionSummaryOut */
+        VersionSummaryOut: {
+            /** Version No */
+            version_no: number;
+            event_type: components["schemas"]["ContractEventType"];
+            /**
+             * Effective Date
+             * Format: date
+             */
+            effective_date: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Transaction Price */
+            transaction_price: string;
+            /** Booked Period */
+            booked_period: string;
         };
     };
     responses: never;
@@ -2232,7 +2510,108 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContractOut"];
+                    "application/json": components["schemas"]["ContractDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_contract_version_api_v1_contracts__contract_id__versions__version_no__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contract_id: number;
+                version_no: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_contract_billing_api_v1_contracts__contract_id__billing_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contract_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractBillingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_source_rows_api_v1_contracts__contract_id__source_rows_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                contract_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_SourceRowOut_"];
+                    "text/csv": unknown;
                 };
             };
             /** @description Validation Error */
@@ -2286,67 +2665,7 @@ export interface operations {
             };
         };
     };
-    get_contracts_contract_id_versions_version_no_api_v1_contracts__contract_id__versions__version_no__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_contracts_contract_id_billing_api_v1_contracts__contract_id__billing_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
     get_contracts_contract_id_journal_lines_api_v1_contracts__contract_id__journal_lines_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_contracts_contract_id_source_rows_api_v1_contracts__contract_id__source_rows_get: {
         parameters: {
             query?: never;
             header?: never;

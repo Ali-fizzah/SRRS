@@ -1,4 +1,4 @@
-"""RECOGNITION job: generate revenue schedules (plan §5.4, §10). Registered with the queue."""
+"""RECOGNITION job: generate schedules and book them (plan §5.4, §10). Registered with the queue."""
 
 from dataclasses import asdict
 from typing import Any
@@ -12,8 +12,9 @@ from app.services.recognition_run import run_recognition
 
 
 def run_recognition_job(db: Session, job: JobRun, report: ReportProgress) -> dict[str, Any]:
-    summary = run_recognition(db, job.created_by, job.id, report)
-    return {"period_key": job.params["period_key"], **asdict(summary)}
+    period_key = job.params["period_key"]
+    summary = run_recognition(db, job.created_by, job.id, report, period_key)
+    return {"period_key": period_key, **asdict(summary)}
 
 
 HANDLERS[JobType.RECOGNITION] = run_recognition_job

@@ -3,6 +3,14 @@
 from decimal import Decimal
 
 
+def to_scaled(amount: Decimal, places: int) -> int:
+    """A Decimal as a whole number of 10^-places units. Refuses anything finer."""
+    scaled = amount.scaleb(places)
+    if scaled != scaled.to_integral_value():
+        raise ValueError(f"{amount} has more than {places} decimal places")
+    return int(scaled)
+
+
 def to_cents(amount: Decimal) -> int:
     """Decimal money from the database -> integer cents. Refuses anything finer than a cent."""
     cents = amount * 100

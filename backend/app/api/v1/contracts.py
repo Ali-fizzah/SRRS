@@ -4,8 +4,8 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import Select, exists, func, or_, select
-from sqlalchemy.orm import aliased
+from sqlalchemy import Select, exists, func, literal, or_, select, union_all
+from sqlalchemy.orm import Session, aliased
 
 from app.api.errors import ApiError
 from app.api.listing import (
@@ -20,18 +20,40 @@ from app.api.listing import (
 from app.api.v1.stubs import stub
 from app.auth.deps import DbSession, require_role
 from app.auth.roles import Role
+from app.engine.money import from_cents
 from app.models import (
     Contract,
     ContractLine,
     ContractVersion,
+    CreditNote,
     Customer,
+    Delivery,
+    Invoice,
+    InvoiceLine,
     PerformanceObligation,
     Product,
     RevenueSchedule,
     ScheduleLine,
+    UploadFile,
 )
 from app.models.enums import ScheduleLineStatus
-from app.schemas.contracts import ContractOut, ScheduleLineOut, SchedulePage
+from app.schemas.contracts import (
+    ContractBillingOut,
+    ContractDetailOut,
+    ContractLineOut,
+    ContractOut,
+    CreditNoteOut,
+    DeliveryOut,
+    InvoiceOut,
+    ObligationOut,
+    PeriodBalanceOut,
+    ScheduleLineOut,
+    SchedulePage,
+    SourceRowOut,
+    VersionDetailOut,
+    VersionSummaryOut,
+)
+from app.services.billing import contract_balances
 
 router = APIRouter(prefix="/contracts", tags=["contracts"])
 
@@ -129,13 +151,211 @@ def list_contracts(
     return list_response(db, statement, params, ContractOut, "contracts.csv")
 
 
-@router.get("/{contract_id}", response_model=ContractOut, dependencies=CanRead)
-def get_contract(contract_id: int, db: DbSession) -> ContractOut:
-    """One contract with its current version; versions, lines and POs arrive in task P3-T6."""
+_VERSION_COLUMNS = (
+    ContractVersion.version_no,
+    ContractVersion.event_type,
+    ContractVersion.effective_date,
+    ContractVersion.start_date,
+    ContractVersion.end_date,
+    ContractVersion.transaction_price,
+    ContractVersion.booked_period,
+)
+
+
+def _require_contract(db: Session, contract_id: int) -> None:
+    if db.get(Contract, contract_id) is None:
+        raise ApiError(404, "NOT_FOUND", f"Contract {contract_id} does not exist.")
+
+
+@router.get("/{contract_id}", response_model=ContractDetailOut, dependencies=CanRead)
+def get_contract(contract_id: int, db: DbSession) -> ContractDetailOut:
+    """One contract: its current version and the list of all its versions (§5.5)."""
     row = db.execute(_contracts().where(Contract.id == contract_id)).first()
     if row is None:
         raise ApiError(404, "NOT_FOUND", f"Contract {contract_id} does not exist.")
-    return ContractOut.model_validate(dict(row._mapping))
+    versions = db.execute(
+        select(*_VERSION_COLUMNS)
+        .where(ContractVersion.contract_id == contract_id)
+        .order_by(ContractVersion.version_no)
+    ).all()
+    return ContractDetailOut(
+        **dict(row._mapping),
+        versions=[VersionSummaryOut.model_validate(dict(v._mapping)) for v in versions],
+    )
+
+
+@router.get(
+    "/{contract_id}/versions/{version_no}",
+    response_model=VersionDetailOut,
+    dependencies=CanRead,
+)
+def get_contract_version(contract_id: int, version_no: int, db: DbSession) -> VersionDetailOut:
+    """One version with its lines, obligations + allocation, and deliveries."""
+    row = db.execute(
+        select(ContractVersion.id, *_VERSION_COLUMNS).where(
+            ContractVersion.contract_id == contract_id, ContractVersion.version_no == version_no
+        )
+    ).first()
+    if row is None:
+        raise ApiError(404, "NOT_FOUND", f"Contract {contract_id} has no version {version_no}.")
+    lines = db.execute(
+        select(
+            ContractLine.id,
+            ContractLine.line_no,
+            Product.product_code,
+            Product.name.label("product_name"),
+            Product.is_separate_obligation,
+            ContractLine.quantity,
+            ContractLine.unit_price,
+            ContractLine.discount,
+            ContractLine.net_price,
+            ContractLine.service_start,
+            ContractLine.service_end,
+            ContractLine.completion_date,
+        )
+        .join(Product, Product.id == ContractLine.product_id)
+        .where(ContractLine.contract_version_id == row.id)
+        .order_by(ContractLine.line_no)
+    ).all()
+    obligations = db.execute(
+        select(
+            PerformanceObligation.id,
+            ContractLine.line_no,
+            Product.product_code,
+            PerformanceObligation.method,
+            PerformanceObligation.ssp_amount,
+            PerformanceObligation.allocated_amount,
+            PerformanceObligation.service_start,
+            PerformanceObligation.service_end,
+            PerformanceObligation.completion_date,
+            PerformanceObligation.status,
+        )
+        .join(ContractLine, ContractLine.id == PerformanceObligation.contract_line_id)
+        .join(Product, Product.id == PerformanceObligation.product_id)
+        .where(PerformanceObligation.contract_version_id == row.id)
+        .order_by(ContractLine.line_no)
+    ).all()
+    deliveries = db.execute(
+        select(
+            Delivery.delivery_code,
+            ContractLine.line_no,
+            Delivery.delivery_date,
+            Delivery.units_fraction,
+        )
+        .join(ContractLine, ContractLine.id == Delivery.contract_line_id)
+        .where(ContractLine.contract_version_id == row.id)
+        .order_by(Delivery.delivery_date, Delivery.id)
+    ).all()
+    summary = {key: value for key, value in row._mapping.items() if key != "id"}
+    return VersionDetailOut(
+        **summary,
+        lines=[ContractLineOut.model_validate(dict(r._mapping)) for r in lines],
+        obligations=[ObligationOut.model_validate(dict(r._mapping)) for r in obligations],
+        deliveries=[DeliveryOut.model_validate(dict(r._mapping)) for r in deliveries],
+    )
+
+
+@router.get("/{contract_id}/billing", response_model=ContractBillingOut, dependencies=CanRead)
+def get_contract_billing(contract_id: int, db: DbSession) -> ContractBillingOut:
+    """Invoices, credit notes and the deferred / unbilled rollforward (plan §5.6)."""
+    _require_contract(db, contract_id)
+    invoices = db.execute(
+        select(Invoice.invoice_number, Invoice.invoice_date, Invoice.total_amount)
+        .where(Invoice.contract_id == contract_id)
+        .order_by(Invoice.invoice_date, Invoice.invoice_number)
+    ).all()
+    credit_notes = db.execute(
+        select(
+            CreditNote.credit_note_number,
+            Invoice.invoice_number,
+            CreditNote.credit_date,
+            CreditNote.amount,
+            CreditNote.reason,
+        )
+        .join(Invoice, Invoice.id == CreditNote.invoice_id)
+        .where(Invoice.contract_id == contract_id)
+        .order_by(CreditNote.credit_date, CreditNote.credit_note_number)
+    ).all()
+    rows = contract_balances(db, contract_id)
+    last = rows[-1] if rows else None
+    return ContractBillingOut(
+        invoices=[InvoiceOut.model_validate(dict(r._mapping)) for r in invoices],
+        credit_notes=[CreditNoteOut.model_validate(dict(r._mapping)) for r in credit_notes],
+        balances=[
+            PeriodBalanceOut(
+                period=r.period,
+                opening_deferred=from_cents(r.opening_deferred),
+                opening_unbilled=from_cents(r.opening_unbilled),
+                billings=from_cents(r.billings),
+                credit_notes=from_cents(r.credit_notes),
+                recognised=from_cents(r.recognised),
+                recognised_from_deferred=from_cents(r.recognised_from_deferred),
+                closing_deferred=from_cents(r.closing_deferred),
+                closing_unbilled=from_cents(r.closing_unbilled),
+            )
+            for r in rows
+        ],
+        deferred=from_cents(last.closing_deferred if last else 0),
+        unbilled=from_cents(last.closing_unbilled if last else 0),
+    )
+
+
+@router.get(
+    "/{contract_id}/source-rows",
+    response_model=Page[SourceRowOut],
+    responses=CSV,
+    dependencies=CanRead,
+)
+def list_source_rows(contract_id: int, db: DbSession, params: Listing) -> Any:
+    """Every uploaded row behind this contract, as it was in the file (CLAUDE.md rule 5)."""
+    _require_contract(db, contract_id)
+
+    def rows(record_type: str, model: Any) -> Select[Any]:
+        return select(
+            literal(record_type).label("record_type"),
+            model.source_upload_id.label("upload_id"),
+            model.source_row.label("source_row"),
+            model.source_payload.label("payload"),
+        ).where(model.source_upload_id.is_not(None))
+
+    of_contract = ContractVersion.contract_id == contract_id
+    unioned = union_all(
+        rows("contract", ContractVersion).where(of_contract),
+        rows("contract_line", ContractLine)
+        .join(ContractVersion, ContractVersion.id == ContractLine.contract_version_id)
+        .where(of_contract),
+        rows("delivery", Delivery)
+        .join(ContractLine, ContractLine.id == Delivery.contract_line_id)
+        .join(ContractVersion, ContractVersion.id == ContractLine.contract_version_id)
+        .where(of_contract),
+        rows("invoice", Invoice).where(Invoice.contract_id == contract_id),
+        rows("invoice_line", InvoiceLine)
+        .join(Invoice, Invoice.id == InvoiceLine.invoice_id)
+        .where(Invoice.contract_id == contract_id),
+        rows("credit_note", CreditNote)
+        .join(Invoice, Invoice.id == CreditNote.invoice_id)
+        .where(Invoice.contract_id == contract_id),
+    ).subquery("source")
+    default_order = (unioned.c.upload_id, unioned.c.source_row, unioned.c.record_type)
+    statement = select(
+        func.row_number().over(order_by=default_order).label("id"),
+        unioned.c.record_type,
+        unioned.c.upload_id,
+        UploadFile.original_filename.label("filename"),
+        unioned.c.source_row,
+        unioned.c.payload,
+    ).join(UploadFile, UploadFile.id == unioned.c.upload_id)
+    statement = apply_sort(
+        statement,
+        params.sort,
+        {
+            "record_type": unioned.c.record_type,
+            "filename": UploadFile.original_filename,
+            "source_row": unioned.c.source_row,
+        },
+        list(default_order),
+    )
+    return list_response(db, statement, params, SourceRowOut, f"contract_{contract_id}_source.csv")
 
 
 @router.get(
@@ -218,7 +438,4 @@ def get_contract_schedule(
     )
 
 
-stub(router, "GET", "/{contract_id}/versions/{version_no}", Role.UPLOADER, "P3-T6")
-stub(router, "GET", "/{contract_id}/billing", Role.UPLOADER, "P3-T6")
 stub(router, "GET", "/{contract_id}/journal-lines", Role.UPLOADER, "P4-T4")
-stub(router, "GET", "/{contract_id}/source-rows", Role.UPLOADER, "P3-T6")

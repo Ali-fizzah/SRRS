@@ -117,9 +117,9 @@ def test_u01_upload_gives_12_schedule_lines(db: Session, user_id: int) -> None:
     lines = list(db.scalars(select(ScheduleLine).order_by(ScheduleLine.service_period)))
     assert [line.service_period for line in lines] == [f"2025{m:02d}" for m in range(1, 13)]
     assert {line.amount for line in lines} == {Decimal("100.00")}
-    # §5.4: PENDING, and not assigned to a posting period yet (task P3-T4).
+    # §5.4: all PENDING; the run for 202501 books January and leaves later months alone.
     assert {line.status.value for line in lines} == {"PENDING"}
-    assert {line.posting_period for line in lines} == {None}
+    assert [line.posting_period for line in lines] == ["202501"] + [None] * 11
     assert {line.is_catch_up for line in lines} == {False}
     assert {line.journal_line_id for line in lines} == {None}
 
@@ -244,29 +244,55 @@ def test_ssp_is_looked_up_on_the_effective_date(db: Session, user_id: int) -> No
 # --------------------------------------------------------------------------- skipped contracts
 
 
-def test_what_the_engine_cannot_do_yet_is_reported_and_others_still_run(
-    db: Session, user_id: int
-) -> None:
+def test_bundles_and_every_method_generate_together(db: Session, user_id: int) -> None:
+    """P3-T2, P3-T3: relative-SSP allocation across obligations with different methods."""
     products = f"{SUB}\n{DAILY}\n{PRINT}"
     new_contract(
         db,
         user_id,
         "A-BUNDLE",
-        "1,SUB,1,100.00,,2025-01-01,2025-12-31,\n2,PRINT,1,10.00,,2025-01-01,2025-12-31,",
+        "1,SUB,1,1200.00,,2025-01-01,2025-12-31,\n"
+        "2,PRINT,1,50.00,,2025-01-01,2025-12-31,2025-03-15\n"
+        "3,DAILY,1,100.00,,2025-02-10,2025-04-20,",
         products=products,
     )
-    new_contract(db, user_id, "B-DAILY", "1,DAILY,1,100.00,,2025-01-15,2025-12-31,")
-    new_contract(db, user_id, "C-OK", "1,SUB,1,1200.00,,2025-01-01,2025-12-31,")
-
     summary = run_recognition(db, user_id)
-    assert reasons(summary) == {
-        "A-BUNDLE": "MULTIPLE_OBLIGATIONS",
-        "B-DAILY": "UNSUPPORTED_METHOD",
-    }
+    assert summary.skipped == []
+    assert (summary.contracts_generated, summary.obligations_created) == (1, 3)
+
+    allocated = db.execute(
+        select(
+            ContractLine.line_no,
+            PerformanceObligation.allocated_amount,
+            PerformanceObligation.method,
+        )
+        .join(PerformanceObligation, PerformanceObligation.contract_line_id == ContractLine.id)
+        .order_by(ContractLine.line_no)
+    ).all()
+    # TP = SSP = 1,350.00, so each line keeps its own price.
+    assert [(no, amount, method.value) for no, amount, method in allocated] == [
+        (1, Decimal("1200.00"), "RATABLE_MONTHLY"),
+        (2, Decimal("50.00"), "POINT_IN_TIME"),
+        (3, Decimal("100.00"), "RATABLE_DAILY"),
+    ]
+    assert db.scalar(select(func.sum(ScheduleLine.amount))) == Decimal("1350.00")
+    # 12 months + one completion month + February to April
+    assert summary.schedule_lines_created == 12 + 1 + 3
+
+
+def test_one_contract_that_cannot_run_does_not_stop_the_others(db: Session, user_id: int) -> None:
+    new_contract(
+        db,
+        user_id,
+        "A-ZERO",
+        "1,ZERO,1,100.00,,2025-01-01,2025-12-31,",
+        products=f"ZERO,Zero,,10.00,FIXED,0.00,,RATABLE_MONTHLY,Y,4100,\n{SUB}",
+    )
+    new_contract(db, user_id, "B-OK", "1,SUB,1,1200.00,,2025-01-01,2025-12-31,")
+    summary = run_recognition(db, user_id)
+    assert reasons(summary) == {"A-ZERO": "NO_SEPARATE_OBLIGATION"}
     assert summary.contracts_generated == 1 and summary.schedule_lines_created == 12
-    assert (
-        db.scalar(select(func.count()).select_from(PerformanceObligation)) == 1
-    )  # nothing partial
+    assert db.scalar(select(func.count()).select_from(PerformanceObligation)) == 1
 
 
 def test_contract_changed_by_an_event_waits_for_p4_t1(db: Session, user_id: int) -> None:

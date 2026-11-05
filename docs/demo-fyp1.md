@@ -33,11 +33,11 @@ Do this **the day before**, then once more 30 minutes before you present.
 | 1:35 | Click **View errors** beside `bad_contract_lines.csv`. | "Row 3 starts on the 15th, but a monthly subscription must cover whole months: E012. Row 4 is fine, but its contract names a customer that does not exist, so the whole contract is held back: E013. We never load half a contract." | Row 3 **E012**, row 4 **E013** |
 | 2:10 | Click **Download error log (CSV)**. Open it if time allows. | "The user gets this list to fix and upload again. Each row keeps its file and row number." | The CSV downloads |
 | 2:25 | Click **Contracts**. | "The good contract from the bad file still loaded, and the two with errors did not. Five contracts, no schedules yet." | 5 rows, all **Not yet**; no `000201` or `000202` |
-| 2:45 | Click **Run recognition**. | "The engine allocates each contract's price and builds its schedule, in integer cents, never floating point." | "5 contracts scheduled, 72 schedule lines created." All chips **Generated** |
+| 2:45 | Click **Run recognition**. | "The engine allocates each contract's price and builds its schedule, in integer cents, never floating point." | "5 contracts scheduled, 72 schedule lines created. 45 lines booked in 2026-12, 40 of them catch-up." All chips **Generated** |
 | 3:10 | Click **000102-SUB**. | "This is the check from our proposal. 11,200 over 12 months is 933.33 a month. The last month absorbs the rounding, so it is 933.37, and the total matches the price to the cent." | 933.33 × 11, then **933.37**. Total **11,200.00** |
 | 3:50 | **All contracts**, then **000104-SUB**. | "This customer also paid a 500 setup fee. It is not a separate obligation, so it is spread through the subscription: 1,700 over 12 months." | 141.67 × 11, then **141.63**. Total **1,700.00** |
 | 4:20 | **All contracts**, then **Run recognition** again. | "Running it twice is safe: nothing is generated twice." | "Nothing new to schedule." |
-| 4:35 | Close. | "Upload, validation, database, schedule, grid, all on the real engine, nothing throwaway. Next: bundles, daily recognition, journals and period close." | |
+| 4:35 | Close. | "Upload, validation, database, schedule, grid, all on the real engine, nothing throwaway. Next: contract events, journals and period close." | |
 
 ## What each contract shows
 
@@ -60,17 +60,17 @@ Total scheduled across the five contracts: **43,500.00**, in **72** lines. `back
 
 ## Questions you may be asked
 
-**Why does "Posting period" say "Not yet"?**
-The schedule says when revenue is *earned*. Choosing the month it is *booked*, including catch-up for past months, is the next phase (plan §5.4, task P3-T4).
+**What do "Booked in" and "Catch-up" mean?**
+A schedule line has two dates: the month revenue is *earned* (service period) and the month it is *booked* (D5). Booked months are never reopened, so revenue earned before the current period is booked now, marked catch-up. Later months show "Not yet" (plan §5.4).
 
 **Why is every contract booked in 2026-12 when some start in January?**
-Booked means the period that was open when the contract was uploaded. Revenue already earned for earlier months will post as catch-up in that period.
+Booked means the period that was open when the contract was uploaded. Revenue already earned for earlier months posts as catch-up in that period.
 
 **Why not floats?**
 `0.1 + 0.2` is not exactly `0.3` in floating point, and the outputs must match the Excel benchmarks within 0.01. The engine uses integer cents, and the database uses `NUMERIC(18,2)`.
 
 **What happens to bundles with several products?**
-They load today but are not scheduled yet. Relative-SSP allocation is task P3-T2. A run reports them by name rather than guessing.
+The price is shared by relative SSP, and any rounding difference goes to the largest obligation (plan §5.2). The Excel workbooks are full of them, and the benchmarks match within 0.01.
 
 **Can posted data be changed?**
 No. Database triggers refuse it, even from a bug in our own code. Corrections will be new reversal entries (plan §6.3).

@@ -1,4 +1,4 @@
-"""P2-T2: allocation for contracts with one separate obligation (plan §5.2, D4)."""
+"""P2-T2 and P3-T2: allocation by relative SSP with the rounding plug (plan §5.2, D4)."""
 
 import pytest
 from hypothesis import given
@@ -7,7 +7,6 @@ from hypothesis import strategies as st
 from app.engine.allocation import (
     Allocation,
     AllocationLine,
-    MultipleObligationsError,
     NoSeparateObligationError,
     allocate,
     transaction_price,
@@ -29,6 +28,34 @@ def test_u01_allocation_equals_the_transaction_price() -> None:
     assert allocate(lines) == [Allocation(1, 120_000)]
 
 
+def test_b01_proposal_worked_example() -> None:
+    """Plan §5.2: TP 12,600; SSP 12,000 + 1,500 = 13,500 -> 11,200.00 and 1,400.00."""
+    lines = [po(1, 1_110_000, 1_200_000), po(2, 150_000, 150_000)]
+    assert transaction_price(lines) == 1_260_000
+    assert allocate(lines) == [Allocation(1, 1_120_000), Allocation(2, 140_000)]
+
+
+def test_plug_goes_to_the_largest_ssp() -> None:
+    lines = [po(1, 10, 1), po(2, 0, 1), po(3, 0, 1), po(4, 0, 3)]
+    # 10 x 1/6 = 1.67 -> 2; 2; 2; 10 x 3/6 = 5 -> Σ = 11, so -1 goes to line 4, the largest.
+    assert allocate(lines) == [
+        Allocation(1, 2),
+        Allocation(2, 2),
+        Allocation(3, 2),
+        Allocation(4, 4),
+    ]
+
+
+def test_tie_on_largest_ssp_goes_to_the_lowest_line_number() -> None:
+    """B02: three equal SSPs, TP 1,000.00: 333.33 each, 0.01 left over goes to line 1."""
+    lines = [po(3, 30_000, 120_000), po(1, 30_000, 120_000), po(2, 40_000, 120_000)]
+    assert allocate(lines) == [
+        Allocation(1, 33_334),
+        Allocation(2, 33_333),
+        Allocation(3, 33_333),
+    ]
+
+
 def test_setup_fee_adds_to_tp_but_gets_no_allocation() -> None:
     """D4: 1,200.00 subscription + 500.00 setup fee: the subscription carries all 1,700.00."""
     lines = [fee(1, 50_000), po(2, 120_000, 120_000)]
@@ -36,27 +63,30 @@ def test_setup_fee_adds_to_tp_but_gets_no_allocation() -> None:
     assert allocate(lines) == [Allocation(2, 170_000)]
 
 
-def test_bundle_header_carries_the_price_of_the_single_obligation() -> None:
-    """The Excel shape: the price is on a header line with SSP 0 (D4)."""
-    lines = [fee(1, 3_000), po(2, 0, 1_890)]
-    assert allocate(lines) == [Allocation(2, 3_000)]
+def test_excel_bundle_shape() -> None:
+    """X01: 30.00 on a header line with SSP 0, shared by relative SSP of 18.90 and 11.10."""
+    lines = [fee(1, 3_000), po(2, 0, 1_890), po(3, 0, 1_110)]
+    assert allocate(lines) == [Allocation(2, 1_890), Allocation(3, 1_110)]
 
 
-def test_allocation_differs_from_ssp_when_the_price_does() -> None:
-    """Discounts reduce TP, not SSP (§5.2): the obligation gets what was actually charged."""
+def test_discounts_reduce_the_allocation_not_the_ssp() -> None:
     assert allocate([po(1, 90_000, 120_000)]) == [Allocation(1, 90_000)]
 
 
-def test_zero_price_with_an_ssp_allocates_zero() -> None:
-    assert allocate([po(1, 0, 120_000)]) == [Allocation(1, 0)]
+def test_zero_price_allocates_zero() -> None:
+    assert allocate([po(1, 0, 120_000), po(2, 0, 10_000)]) == [Allocation(1, 0), Allocation(2, 0)]
+
+
+def test_an_obligation_with_zero_ssp_gets_nothing_while_others_have_ssp() -> None:
+    assert allocate([po(1, 100, 100), po(2, 0, 0)]) == [Allocation(1, 100), Allocation(2, 0)]
 
 
 @pytest.mark.parametrize(
     "lines",
     [
         [],
-        [fee(1, 50_000)],  # only a setup fee
-        [po(1, 120_000, 0)],  # a separate line whose SSP is 0
+        [fee(1, 50_000)],
+        [po(1, 120_000, 0)],
         [po(1, 60_000, 0), po(2, 60_000, 0), fee(3, 100)],
     ],
     ids=["no lines", "no separate line", "ssp is zero", "all ssp zero"],
@@ -65,13 +95,6 @@ def test_sum_of_ssp_zero_is_e014(lines: list[AllocationLine]) -> None:
     with pytest.raises(NoSeparateObligationError) as error:
         allocate(lines)
     assert error.value.code == "E014"
-
-
-def test_several_obligations_wait_for_p3_t2_instead_of_guessing() -> None:
-    """B01's bundle: refused now; P3-T2 must give 11,200.00 and 1,400.00."""
-    lines = [po(1, 1_260_000, 1_200_000), po(2, 0, 150_000)]
-    with pytest.raises(MultipleObligationsError, match="P3-T2"):
-        allocate(lines)
 
 
 @pytest.mark.parametrize(
@@ -85,14 +108,16 @@ def test_negative_amounts_are_refused(line: AllocationLine) -> None:
 
 
 @given(
-    net=st.integers(min_value=0, max_value=10**15),
-    ssp=st.integers(min_value=1, max_value=10**15),
-    fees=st.lists(st.integers(min_value=0, max_value=10**12), max_size=5),
+    obligations=st.lists(
+        st.tuples(st.integers(0, 10**12), st.integers(1, 10**12)), min_size=1, max_size=8
+    ),
+    fees=st.lists(st.integers(0, 10**10), max_size=3),
 )
-def test_the_single_obligation_always_receives_exactly_the_tp(
-    net: int, ssp: int, fees: list[int]
+def test_allocations_always_add_up_to_the_tp(
+    obligations: list[tuple[int, int]], fees: list[int]
 ) -> None:
-    lines = [po(1, net, ssp), *(fee(i + 2, cents) for i, cents in enumerate(fees))]
-    (allocation,) = allocate(lines)
-    assert allocation.line_no == 1
-    assert allocation.allocated_cents == net + sum(fees) == transaction_price(lines)
+    lines = [po(i + 1, net, ssp) for i, (net, ssp) in enumerate(obligations)]
+    lines += [fee(100 + i, cents) for i, cents in enumerate(fees)]
+    result = allocate(lines)
+    assert sum(a.allocated_cents for a in result) == transaction_price(lines)
+    assert [a.line_no for a in result] == [line.line_no for line in lines if line.is_separate]

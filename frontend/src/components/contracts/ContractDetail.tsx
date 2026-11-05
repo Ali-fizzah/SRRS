@@ -12,42 +12,18 @@ import Stack from "@mui/material/Stack";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import Typography from "@mui/material/Typography";
-import type { GridColDef } from "@mui/x-data-grid";
 import { useQuery } from "@tanstack/react-query";
 import NextLink from "next/link";
+import { useState } from "react";
 
-import ServerDataGrid from "@/components/ServerDataGrid";
+import BillingTab from "@/components/contracts/BillingTab";
+import ScheduleTab from "@/components/contracts/ScheduleTab";
+import SourceRowsTab from "@/components/contracts/SourceRowsTab";
+import VersionTabs from "@/components/contracts/VersionTabs";
 import { apiGet, type Schemas } from "@/lib/api/client";
 import { formatMoney, formatPeriod } from "@/lib/format";
 
-type ScheduleRow = Schemas["ScheduleLineOut"];
-
-const COLUMNS: GridColDef<ScheduleRow>[] = [
-  {
-    field: "service_period",
-    headerName: "Service period",
-    width: 140,
-    valueFormatter: (value: string) => formatPeriod(value),
-  },
-  {
-    field: "amount",
-    headerName: "Amount",
-    width: 130,
-    align: "right",
-    headerAlign: "right",
-    valueFormatter: (value: string) => formatMoney(value),
-  },
-  { field: "line_no", headerName: "Line", type: "number", width: 70 },
-  { field: "product_code", headerName: "Product", flex: 1, minWidth: 180 },
-  { field: "method", headerName: "Method", width: 170, sortable: false },
-  { field: "status", headerName: "Status", width: 110 },
-  {
-    field: "posting_period",
-    headerName: "Posting period",
-    width: 140,
-    valueFormatter: (value: string | null) => (value ? formatPeriod(value) : "Not yet"),
-  },
-];
+type TabName = "schedule" | "lines" | "obligations" | "versions" | "billing" | "source";
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
@@ -62,11 +38,12 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** Contract page (plan §9). Task P2-T5 builds the schedule tab; P3-T8 adds the other tabs. */
+/** Contract page (plan §9): summary, then tabs down to the uploaded source rows. */
 export default function ContractDetail({ id }: { id: string }) {
+  const [tab, setTab] = useState<TabName>("schedule");
   const contract = useQuery({
     queryKey: ["/contracts", id],
-    queryFn: () => apiGet<Schemas["ContractOut"]>(`/contracts/${id}`),
+    queryFn: () => apiGet<Schemas["ContractDetailOut"]>(`/contracts/${id}`),
   });
   const data = contract.data;
 
@@ -100,39 +77,27 @@ export default function ContractDetail({ id }: { id: string }) {
       )}
       {data && (
         <Box>
-          <Tabs value="schedule" aria-label="Contract details" sx={{ mb: 2 }}>
+          <Tabs
+            value={tab}
+            onChange={(_event, value: TabName) => setTab(value)}
+            aria-label="Contract details"
+            variant="scrollable"
+            scrollButtons="auto"
+            sx={{ mb: 2 }}
+          >
             <Tab value="schedule" label="Schedule" />
+            <Tab value="lines" label="Lines" />
+            <Tab value="obligations" label="Obligations" />
+            <Tab value="versions" label="Versions" />
+            <Tab value="billing" label="Billing" />
+            <Tab value="source" label="Source rows" />
           </Tabs>
-          <ServerDataGrid<ScheduleRow>
-            path={`/contracts/${id}/schedule`}
-            columns={COLUMNS}
-            label="Revenue schedule"
-            emptyText="No schedule yet. Use Run recognition on the Contracts page."
-            renderSummary={(page) => (
-              <Box
-                data-testid="schedule-summary"
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 2,
-                  flexWrap: "wrap",
-                  mb: 1,
-                }}
-              >
-                <Typography sx={{ flexGrow: 1 }}>
-                  {page.total} schedule line{page.total === 1 ? "" : "s"}, total{" "}
-                  <strong>{formatMoney(page.total_amount as string)}</strong>
-                </Typography>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  href={`/api/v1/contracts/${id}/schedule?format=csv`}
-                >
-                  Export CSV
-                </Button>
-              </Box>
-            )}
-          />
+          {tab === "schedule" && <ScheduleTab id={id} />}
+          {(tab === "lines" || tab === "obligations" || tab === "versions") && (
+            <VersionTabs contract={data} id={id} tab={tab} />
+          )}
+          {tab === "billing" && <BillingTab id={id} />}
+          {tab === "source" && <SourceRowsTab id={id} />}
         </Box>
       )}
     </Stack>

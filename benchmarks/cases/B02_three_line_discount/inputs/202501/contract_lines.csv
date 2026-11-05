@@ -1,0 +1,4 @@
+contract_id,line_no,product_id,quantity,unit_price,discount,service_start,service_end,completion_date
+B02,1,L1,1,500.00,200.00,2025-01-01,2025-12-31,
+B02,2,L2,1,400.00,,2025-01-01,2025-12-31,
+B02,3,L3,1,300.00,,2025-01-01,2025-12-31,

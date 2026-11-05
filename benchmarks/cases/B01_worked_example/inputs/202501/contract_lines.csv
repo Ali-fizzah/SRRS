@@ -1,0 +1,3 @@
+contract_id,line_no,product_id,quantity,unit_price,discount,service_start,service_end,completion_date
+B01,1,SUBSCRIPTION,1,12000.00,900.00,2025-01-01,2025-12-31,
+B01,2,TRAINING,1,1500.00,,2025-01-15,2025-01-15,2025-01-15

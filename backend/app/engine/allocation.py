@@ -1,21 +1,15 @@
-"""Allocation of the transaction price (plan §5.2). Pure: integer cents in and out.
-
-This is the single-obligation version (task P2-T2). Relative-SSP allocation across several
-obligations, with the rounding plug, arrives in task P3-T2.
-"""
+"""Allocation of the transaction price by relative SSP (plan §5.2). Pure: integer cents."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+
+from app.engine.money import round_half_up_div
 
 
 class NoSeparateObligationError(ValueError):
     """Σ SSP = 0: the contract is rejected (plan §5.2)."""
 
     code = "E014"
-
-
-class MultipleObligationsError(NotImplementedError):
-    """Several separate obligations need the relative-SSP allocation of task P3-T2."""
 
 
 @dataclass(frozen=True)
@@ -38,16 +32,24 @@ def transaction_price(lines: Sequence[AllocationLine]) -> int:
 
 
 def allocate(lines: Sequence[AllocationLine]) -> list[Allocation]:
-    """Plan §5.2 for a contract with one separate obligation: it receives the whole TP."""
+    """Plan §5.2.
+
+    alloc_i = round_half_up(TP x SSP_i / Σ SSP); the rounding difference goes to the obligation
+    with the largest SSP (tie: lowest line number), so allocations always add up to TP exactly.
+    """
     for line in lines:
         if line.net_cents < 0 or line.ssp_cents < 0:
             raise ValueError(f"line {line.line_no} has a negative amount")
 
-    obligations = [line for line in lines if line.is_separate]
-    if sum(line.ssp_cents for line in obligations) == 0:
+    obligations = sorted((line for line in lines if line.is_separate), key=lambda x: x.line_no)
+    total_ssp = sum(line.ssp_cents for line in obligations)
+    if total_ssp == 0:
         raise NoSeparateObligationError("the contract has no separate obligation with an SSP")
-    if len(obligations) > 1:
-        raise MultipleObligationsError(
-            f"{len(obligations)} separate obligations: allocation across several is task P3-T2"
-        )
-    return [Allocation(obligations[0].line_no, transaction_price(lines))]
+
+    tp = transaction_price(lines)
+    amounts = {
+        line.line_no: round_half_up_div(tp * line.ssp_cents, total_ssp) for line in obligations
+    }
+    largest = min(obligations, key=lambda line: (-line.ssp_cents, line.line_no))
+    amounts[largest.line_no] += tp - sum(amounts.values())
+    return [Allocation(line.line_no, amounts[line.line_no]) for line in obligations]

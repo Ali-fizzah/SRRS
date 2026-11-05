@@ -63,6 +63,8 @@ class ExistingData:
     accounts: Mapping[str, str] = field(default_factory=dict)  # code -> ASSET/LIABILITY/REVENUE
     contracts: Mapping[str, ContractInfo] = field(default_factory=dict)
     invoices: Mapping[str, InvoiceInfo] = field(default_factory=dict)
+    # Per contract, billed minus recognised: positive is the deferred balance (§5.6).
+    positions: Mapping[str, Decimal] = field(default_factory=dict)
     credit_notes: frozenset[str] = frozenset()
     deliveries: frozenset[str] = frozenset()
     delivered: Mapping[tuple[str, int], Decimal] = field(default_factory=dict)  # Σ units_fraction
@@ -540,6 +542,11 @@ def _credit_notes(rows: list[Row], known: _Known) -> None:
         "credit_note_number",
     )
     remaining = {n: i.total - i.credited for n, i in known.invoices.items()}
+    positions = dict(known.existing.positions)
+    for invoice_number, info in known.invoices.items():  # earlier in this upload count too
+        if invoice_number not in known.existing.invoices:
+            code = info.contract_code
+            positions[code] = positions.get(code, Decimal(0)) + info.total
     for row in rows:
         number = row.values.get("credit_note_number")
         if number in known.existing.credit_notes:
@@ -567,8 +574,21 @@ def _credit_notes(rows: list[Row], known: _Known) -> None:
                     f"The credit is more than is left on invoice {invoice_no} "
                     f"({remaining[invoice_no]}).",
                 )
-            else:
-                remaining[invoice_no] -= row.values["amount"]
+                continue
+            position = positions.get(invoice.contract_code)
+            if position is not None and row.values["amount"] > position:
+                deferred = max(position, Decimal(0))
+                row.fail(
+                    "E009",
+                    "amount",
+                    f"The credit is more than the deferred revenue of contract "
+                    f"{invoice.contract_code} ({deferred}); reversing recognised revenue is out "
+                    "of scope (plan §5.6).",
+                )
+                continue
+            remaining[invoice_no] -= row.values["amount"]
+            if position is not None:
+                positions[invoice.contract_code] = position - row.values["amount"]
 
 
 # --------------------------------------------------------------------------- deliveries

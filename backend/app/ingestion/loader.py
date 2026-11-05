@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.audit import write_audit
 from app.db.base import Base
+from app.engine.money import from_cents
 from app.ingestion.parser import CellError, FileRejectedError, ParsedRow, parse_rows, read_table
 from app.ingestion.templates import TEMPLATES
 from app.ingestion.validators import (
@@ -60,6 +61,7 @@ from app.models.enums import (
     UploadStatus,
     UploadTemplate,
 )
+from app.services.billing import contract_position_cents
 
 CENT = Decimal("0.01")
 # A blank ssp_valid_from: the product's first SSP applies from the beginning.
@@ -382,7 +384,20 @@ def _existing(
             )
         ),
         delivered=dict(delivered),
+        positions=_positions(db, contract_codes) if tpl.CREDIT_NOTES in parsed else {},
     )
+
+
+def _positions(db: Session, contract_codes: set[str]) -> dict[str, Decimal]:
+    """Billed minus recognised per contract, for the §5.6 credit note check."""
+    return {
+        code: from_cents(contract_position_cents(db, contract_id))
+        for code, contract_id in db.execute(
+            select(Contract.contract_code, Contract.id).where(
+                Contract.contract_code.in_(contract_codes)
+            )
+        ).tuples()
+    }
 
 
 def _line_products(db: Session, contract_codes: set[str]) -> set[str]:

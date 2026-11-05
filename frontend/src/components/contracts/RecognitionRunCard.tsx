@@ -19,8 +19,31 @@ import { fetchMe } from "@/lib/session";
 type RunResult = {
   contracts_generated: number;
   schedule_lines_created: number;
+  schedules_rebuilt: number;
+  lines_booked: number;
+  catch_up_lines: number;
   skipped: { contract_code: string; reason: string; message: string }[];
 };
+
+/** What a finished run did, in one sentence. */
+function runSummary(result: RunResult, period: string | undefined): string {
+  const parts: string[] = [];
+  if (result.contracts_generated > 0) {
+    const plural = result.contracts_generated === 1 ? "" : "s";
+    parts.push(
+      `${result.contracts_generated} contract${plural} scheduled, ${result.schedule_lines_created} schedule lines created.`,
+    );
+  }
+  if (result.schedules_rebuilt > 0) {
+    parts.push(`${result.schedules_rebuilt} schedules updated for new deliveries.`);
+  }
+  if (result.lines_booked > 0) {
+    parts.push(
+      `${result.lines_booked} lines booked in ${period ? formatPeriod(period) : "this period"}, ${result.catch_up_lines} of them catch-up.`,
+    );
+  }
+  return parts.length > 0 ? parts.join(" ") : "Nothing new to schedule.";
+}
 
 const MAY_RUN = new Set(["ACCOUNTANT", "APPROVER", "ADMIN"]); // plan §8 Engine: ACCOUNTANT
 
@@ -93,9 +116,7 @@ export default function RecognitionRunCard() {
         )}
         {result && (
           <Alert severity="success" sx={{ mt: 2 }} data-testid="run-result">
-            {result.contracts_generated === 0
-              ? "Nothing new to schedule."
-              : `${result.contracts_generated} contract${result.contracts_generated === 1 ? "" : "s"} scheduled, ${result.schedule_lines_created} schedule lines created.`}
+            {runSummary(result, current)}
           </Alert>
         )}
         {result && result.skipped.length > 0 && (
