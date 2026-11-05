@@ -74,6 +74,7 @@ export default function BillingTab({ id }: { id: string }) {
             },
             { header: "Billings", cell: (r) => formatMoney(r.billings), align: "right" },
             { header: "Credit notes", cell: (r) => formatMoney(r.credit_notes), align: "right" },
+            { header: "Reversals", cell: (r) => formatMoney(r.adjustments), align: "right" },
             { header: "Recognised", cell: (r) => formatMoney(r.recognised), align: "right" },
             {
               header: "Closing deferred",

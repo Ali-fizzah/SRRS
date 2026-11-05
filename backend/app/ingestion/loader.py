@@ -300,13 +300,15 @@ def _existing(
             start_date=start,
             end_date=end,
             lines={no: info for no, (_, info) in lines.get(code, {}).items()},
+            cancelled=status == ContractStatus.CANCELLED,
         )
-        for code, customer, start, end in db.execute(
+        for code, customer, start, end, status in db.execute(
             select(
                 Contract.contract_code,
                 Customer.customer_code,
                 ContractVersion.start_date,
                 ContractVersion.end_date,
+                Contract.status,
             )
             .join(Customer, Customer.id == Contract.customer_id)
             .join(

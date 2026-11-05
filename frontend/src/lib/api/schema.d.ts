@@ -508,8 +508,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P4-T4 */
-        get: operations["get_contracts_contract_id_journal_lines_api_v1_contracts__contract_id__journal_lines_get"];
+        /**
+         * List Contract Journal Lines
+         * @description Every journal line of this contract, from any batch (plan §9, drill-down).
+         */
+        get: operations["list_contract_journal_lines_api_v1_contracts__contract_id__journal_lines_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -638,8 +641,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Built in P4-T3 */
-        post: operations["post_periods_key_journals_generate_api_v1_periods__key__journals_generate_post"];
+        /**
+         * Start Journal Generation
+         * @description Queue a JOURNALS job for the current period (plan §5.7, §10).
+         */
+        post: operations["start_journal_generation_api_v1_periods__key__journals_generate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -670,8 +676,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P4-T4 */
-        get: operations["get_journal_batches_api_v1_journal_batches_get"];
+        /**
+         * List Batches
+         * @description Batches by period and status (plan §9). Newest first.
+         */
+        get: operations["list_batches_api_v1_journal_batches_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -687,8 +696,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Built in P4-T4 */
-        get: operations["get_journal_batches_batch_id_api_v1_journal_batches__batch_id__get"];
+        /**
+         * Get Batch
+         * @description The batch with its entries and lines, and the balance worked out from the lines.
+         */
+        get: operations["get_batch_api_v1_journal_batches__batch_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -706,8 +718,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Built in P4-T4 */
-        post: operations["post_journal_batches_batch_id_approve_api_v1_journal_batches__batch_id__approve_post"];
+        /**
+         * Approve
+         * @description DRAFT -> APPROVED. The user who generated the batch cannot approve it (D13).
+         */
+        post: operations["approve_api_v1_journal_batches__batch_id__approve_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -723,8 +738,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Built in P4-T4 */
-        post: operations["post_journal_batches_batch_id_send_back_api_v1_journal_batches__batch_id__send_back_post"];
+        /**
+         * Send Back
+         * @description APPROVED -> DRAFT (§5.7).
+         */
+        post: operations["send_back_api_v1_journal_batches__batch_id__send_back_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -740,8 +758,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Built in P4-T4 */
-        post: operations["post_journal_batches_batch_id_post_api_v1_journal_batches__batch_id__post_post"];
+        /**
+         * Post
+         * @description APPROVED -> POSTED. Read-only from here on (§6.3).
+         */
+        post: operations["post_api_v1_journal_batches__batch_id__post_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -757,8 +778,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Built in P4-T4 */
-        post: operations["post_journal_entries_entry_id_reverse_api_v1_journal_entries__entry_id__reverse_post"];
+        /**
+         * Reverse
+         * @description Book a REVERSAL in a new DRAFT batch of the current period (§5.7).
+         */
+        post: operations["reverse_api_v1_journal_entries__entry_id__reverse_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -920,6 +944,11 @@ export interface components {
          * @enum {string}
          */
         AccountRole: "AR" | "UNBILLED_AR" | "DEFERRED_REVENUE" | "REVENUE";
+        /**
+         * BatchStatus
+         * @enum {string}
+         */
+        BatchStatus: "DRAFT" | "APPROVED" | "POSTED";
         /** Body_create_upload_api_v1_uploads_post */
         Body_create_upload_api_v1_uploads_post: {
             /** Files */
@@ -1198,6 +1227,113 @@ export interface components {
          * @enum {string}
          */
         JobType: "INGEST" | "RECOGNITION" | "JOURNALS" | "EXPORT";
+        /**
+         * JournalBatchDetail
+         * @description A batch and one page of its lines (plan §4: paging happens on the server).
+         */
+        JournalBatchDetail: {
+            batch: components["schemas"]["JournalBatchOut"];
+            /** Balanced */
+            balanced: boolean;
+            /** Items */
+            items: components["schemas"]["JournalLineOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** JournalBatchOut */
+        JournalBatchOut: {
+            /** Id */
+            id: number;
+            /** Period Key */
+            period_key: string;
+            /** Batch No */
+            batch_no: number;
+            status: components["schemas"]["BatchStatus"];
+            /** Generated By Name */
+            generated_by_name: string;
+            /** Generated By Id */
+            generated_by_id: number;
+            /** Approved By Name */
+            approved_by_name: string | null;
+            /** Approved At */
+            approved_at: string | null;
+            /** Posted By Name */
+            posted_by_name: string | null;
+            /** Posted At */
+            posted_at: string | null;
+            /** Total Debit */
+            total_debit: string;
+            /** Total Credit */
+            total_credit: string;
+            /** Entry Count */
+            entry_count: number;
+        };
+        /**
+         * JournalEntryType
+         * @enum {string}
+         */
+        JournalEntryType: "INVOICE" | "CREDIT_NOTE" | "REVENUE" | "REVENUE_CATCH_UP" | "REVERSAL" | "ADJUSTMENT";
+        /**
+         * JournalLineOut
+         * @description One journal line with its entry, for the batch page and the contract's Journals tab.
+         */
+        JournalLineOut: {
+            /** Id */
+            id: number;
+            /** Entry Id */
+            entry_id: number;
+            entry_type: components["schemas"]["JournalEntryType"];
+            /**
+             * Entry Date
+             * Format: date
+             */
+            entry_date: string;
+            /** Description */
+            description: string | null;
+            /** Contract Id */
+            contract_id: number;
+            /** Contract Code */
+            contract_code: string;
+            /** Version No */
+            version_no: number;
+            /** Source Type */
+            source_type: string;
+            /** Source Id */
+            source_id: number | null;
+            /** Source Upload Id */
+            source_upload_id: number | null;
+            /** Source Row */
+            source_row: number | null;
+            /** Reverses Entry Id */
+            reverses_entry_id: number | null;
+            /** Account Code */
+            account_code: string;
+            /** Account Name */
+            account_name: string;
+            /** Debit */
+            debit: string;
+            /** Credit */
+            credit: string;
+            /** Product Code */
+            product_code: string | null;
+            /** Line No */
+            line_no: number | null;
+            /** Batch Id */
+            batch_id: number;
+            /** Batch No */
+            batch_no: number;
+            batch_status: components["schemas"]["BatchStatus"];
+            /** Period Key */
+            period_key: string;
+            /** First Of Entry */
+            first_of_entry: boolean;
+            /** Can Reverse */
+            can_reverse: boolean;
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Email */
@@ -1281,6 +1417,28 @@ export interface components {
             /** Page Size */
             page_size: number;
         };
+        /** Page[JournalBatchOut] */
+        Page_JournalBatchOut_: {
+            /** Items */
+            items: components["schemas"]["JournalBatchOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** Page[JournalLineOut] */
+        Page_JournalLineOut_: {
+            /** Items */
+            items: components["schemas"]["JournalLineOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
         /** Page[PeriodOut] */
         Page_PeriodOut_: {
             /** Items */
@@ -1340,6 +1498,8 @@ export interface components {
             billings: string;
             /** Credit Notes */
             credit_notes: string;
+            /** Adjustments */
+            adjustments: string;
             /** Recognised */
             recognised: string;
             /** Recognised From Deferred */
@@ -1405,6 +1565,16 @@ export interface components {
          * @enum {string}
          */
         RecognitionMethod: "RATABLE_DAILY" | "RATABLE_MONTHLY" | "POINT_IN_TIME";
+        /** ReverseIn */
+        ReverseIn: {
+            /** Reason */
+            reason: string;
+        };
+        /** ReverseOut */
+        ReverseOut: {
+            /** Batch Id */
+            batch_id: number;
+        };
         /**
          * Role
          * @enum {string}
@@ -1448,6 +1618,11 @@ export interface components {
             page_size: number;
             /** Total Amount */
             total_amount: string;
+        };
+        /** SendBackIn */
+        SendBackIn: {
+            /** Reason */
+            reason?: string | null;
         };
         /**
          * SourceRowOut
@@ -2665,22 +2840,42 @@ export interface operations {
             };
         };
     };
-    get_contracts_contract_id_journal_lines_api_v1_contracts__contract_id__journal_lines_get: {
+    list_contract_journal_lines_api_v1_contracts__contract_id__journal_lines_get: {
         parameters: {
-            query?: never;
+            query?: {
+                period_from?: string | null;
+                period_to?: string | null;
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
             header?: never;
-            path?: never;
+            path: {
+                contract_id: number;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_JournalLineOut_"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2833,22 +3028,33 @@ export interface operations {
             };
         };
     };
-    post_periods_key_journals_generate_api_v1_periods__key__journals_generate_post: {
+    start_journal_generation_api_v1_periods__key__journals_generate_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                key: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["JobAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2884,9 +3090,18 @@ export interface operations {
             };
         };
     };
-    get_journal_batches_api_v1_journal_batches_get: {
+    list_batches_api_v1_journal_batches_get: {
         parameters: {
-            query?: never;
+            query?: {
+                status?: components["schemas"]["BatchStatus"] | null;
+                period_from?: string | null;
+                period_to?: string | null;
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2894,112 +3109,192 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Page_JournalBatchOut_"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    get_journal_batches_batch_id_api_v1_journal_batches__batch_id__get: {
+    get_batch_api_v1_journal_batches__batch_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description Column name; prefix - for descending. */
+                sort?: string | null;
+                format?: "json" | "csv";
+            };
             header?: never;
-            path?: never;
+            path: {
+                batch_id: number;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["JournalBatchDetail"];
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    post_journal_batches_batch_id_approve_api_v1_journal_batches__batch_id__approve_post: {
+    approve_api_v1_journal_batches__batch_id__approve_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                batch_id: number;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["JournalBatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    post_journal_batches_batch_id_send_back_api_v1_journal_batches__batch_id__send_back_post: {
+    send_back_api_v1_journal_batches__batch_id__send_back_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                batch_id: number;
+            };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SendBackIn"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["JournalBatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    post_journal_batches_batch_id_post_api_v1_journal_batches__batch_id__post_post: {
+    post_api_v1_journal_batches__batch_id__post_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                batch_id: number;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            501: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["JournalBatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    post_journal_entries_entry_id_reverse_api_v1_journal_entries__entry_id__reverse_post: {
+    reverse_api_v1_journal_entries__entry_id__reverse_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                entry_id: number;
+            };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
-            501: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ReverseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -43,6 +43,7 @@ class ContractInfo:
     start_date: date
     end_date: date
     lines: Mapping[int, LineInfo]  # lines of the current version
+    cancelled: bool = False
 
 
 @dataclass(frozen=True)
@@ -351,6 +352,11 @@ def _contract_row(row: Row, known: _Known) -> None:
             "E004", "contract_id", f"Contract {code} does not exist, so it cannot have a {event}."
         )
         return
+    if current.cancelled:
+        row.fail(
+            "E009", "event_type", f"Contract {code} is cancelled, so it cannot have a {event}."
+        )
+        return
     if customer is not None and customer != current.customer_code:
         row.fail(
             "E009",
@@ -368,6 +374,39 @@ def _contract_row(row: Row, known: _Known) -> None:
             f"A {event} must take effect in the current period ({existing.current_period}) or "
             "later; earlier periods are closed (D6).",
         )
+    elif row.has("effective_date"):
+        _event_date_fits_monthly_lines(row, event, current, known)
+
+
+def _event_date_fits_monthly_lines(
+    row: Row, event: ContractEventType, current: ContractInfo, known: _Known
+) -> None:
+    """§5.5, E012: a ratable monthly line can only stop at a month end, so a cancellation needs a
+    month-end date and an upgrade, which restarts the line, needs the 1st of a month."""
+    if event not in (ContractEventType.CANCELLATION, ContractEventType.UPGRADE):
+        return
+    effective = row.values["effective_date"]
+    month_end = period_bounds(f"{effective.year:04d}{effective.month:02d}")[1]
+    for line in current.lines.values():
+        product = known.products.get(line.product_code)
+        if product is None or product.method != RecognitionMethod.RATABLE_MONTHLY:
+            continue
+        if event == ContractEventType.CANCELLATION:
+            if line.service_start <= effective < line.service_end and effective != month_end:
+                row.fail(
+                    "E012",
+                    "effective_date",
+                    "A contract with a RATABLE_MONTHLY line can only be cancelled at a month end.",
+                )
+                return
+        elif line.service_start < effective <= line.service_end and effective.day != 1:
+            row.fail(
+                "E012",
+                "effective_date",
+                "A contract with a RATABLE_MONTHLY line can only be upgraded from the 1st of a "
+                "month.",
+            )
+            return
 
 
 def _line_row(row: Row, header: Row | None, known: _Known) -> None:
@@ -445,6 +484,16 @@ def _contract_shape(header: Row, lines: list[Row], known: _Known) -> None:
                     "line_no",
                     f"An UPGRADE uploads only added lines; contract {code} already has line "
                     f"{row.values['line_no']} (plan §5.5).",
+                )
+            if (
+                row.has("service_start")
+                and header.has("effective_date")
+                and row.values["service_start"] < header.values["effective_date"]
+            ):
+                row.fail(
+                    "E007",
+                    "service_start",
+                    "An added line cannot start before the upgrade takes effect (plan §5.5).",
                 )
     products = [known.products.get(r.values["product_id"]) for r in lines if r.has("product_id")]
     if (

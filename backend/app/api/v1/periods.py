@@ -55,13 +55,7 @@ stub(router, "POST", "/{key}/reopen", Role.ADMIN, "P5-T1")
 Accountant = Annotated[CurrentUser, Depends(require_role(Role.ACCOUNTANT))]
 
 
-@router.post("/{key}/recognition-run", response_model=JobAccepted, status_code=202)
-def start_recognition_run(key: str, db: DbSession, user: Accountant) -> JobAccepted:
-    """Queue a RECOGNITION job for the current period (plan §5.4, §10).
-
-    OPEN or CLOSING: during close the period is still current and journals are still
-    generated (§5.8). Earlier and later periods are refused.
-    """
+def _require_current(db: DbSession, key: str, what: str) -> None:
     status = db.scalar(select(AccountingPeriod.status).where(AccountingPeriod.period_key == key))
     if status is None:
         raise ApiError(404, "NOT_FOUND", f"Period {key} does not exist.")
@@ -69,8 +63,18 @@ def start_recognition_run(key: str, db: DbSession, user: Accountant) -> JobAccep
         raise ApiError(
             409,
             "PERIOD_NOT_CURRENT",
-            f"Period {key} is {status.value}; recognition runs only for the current period.",
+            f"Period {key} is {status.value}; {what} only for the current period.",
         )
+
+
+@router.post("/{key}/recognition-run", response_model=JobAccepted, status_code=202)
+def start_recognition_run(key: str, db: DbSession, user: Accountant) -> JobAccepted:
+    """Queue a RECOGNITION job for the current period (plan §5.4, §10).
+
+    OPEN or CLOSING: during close the period is still current and journals are still
+    generated (§5.8). Earlier and later periods are refused.
+    """
+    _require_current(db, key, "recognition runs")
     job = enqueue(db, JobType.RECOGNITION, {"period_key": key}, user.id)
     write_audit(
         db,
@@ -84,4 +88,18 @@ def start_recognition_run(key: str, db: DbSession, user: Accountant) -> JobAccep
     return JobAccepted(job_id=job.id)
 
 
-stub(router, "POST", "/{key}/journals/generate", Role.ACCOUNTANT, "P4-T3")
+@router.post("/{key}/journals/generate", response_model=JobAccepted, status_code=202)
+def start_journal_generation(key: str, db: DbSession, user: Accountant) -> JobAccepted:
+    """Queue a JOURNALS job for the current period (plan §5.7, §10)."""
+    _require_current(db, key, "journals are generated")
+    job = enqueue(db, JobType.JOURNALS, {"period_key": key}, user.id)
+    write_audit(
+        db,
+        user_id=user.id,
+        action="JOURNALS_REQUESTED",
+        entity_type="accounting_period",
+        entity_id=key,
+        after={"job_id": job.id},
+    )
+    db.commit()
+    return JobAccepted(job_id=job.id)

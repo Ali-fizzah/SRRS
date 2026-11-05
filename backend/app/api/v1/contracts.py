@@ -17,11 +17,12 @@ from app.api.listing import (
     list_response,
     page_of,
 )
-from app.api.v1.stubs import stub
+from app.api.v1.journals import JOURNAL_LINE_SORTS, journal_lines_query
 from app.auth.deps import DbSession, require_role
 from app.auth.roles import Role
 from app.engine.money import from_cents
 from app.models import (
+    AccountingPeriod,
     Contract,
     ContractLine,
     ContractVersion,
@@ -30,13 +31,15 @@ from app.models import (
     Delivery,
     Invoice,
     InvoiceLine,
+    JournalEntry,
+    JournalLine,
     PerformanceObligation,
     Product,
     RevenueSchedule,
     ScheduleLine,
     UploadFile,
 )
-from app.models.enums import ScheduleLineStatus
+from app.models.enums import ContractEventType, ObligationStatus, ScheduleLineStatus
 from app.schemas.contracts import (
     ContractBillingOut,
     ContractDetailOut,
@@ -53,6 +56,7 @@ from app.schemas.contracts import (
     VersionDetailOut,
     VersionSummaryOut,
 )
+from app.schemas.journals import JournalLineOut
 from app.services.billing import contract_balances
 
 router = APIRouter(prefix="/contracts", tags=["contracts"])
@@ -64,7 +68,18 @@ CENT = Decimal("0.01")
 
 def _contracts() -> Select[Any]:
     """Contracts with the fields of their current version (ContractOut)."""
-    has_schedule = exists().where(PerformanceObligation.contract_version_id == ContractVersion.id)
+    # A cancellation has no obligations of its own: it is done once none is left active (§5.5).
+    any_version = aliased(ContractVersion)
+    still_active = (
+        exists()
+        .where(any_version.contract_id == Contract.id)
+        .where(PerformanceObligation.contract_version_id == any_version.id)
+        .where(PerformanceObligation.status == ObligationStatus.ACTIVE)
+    )
+    has_schedule = or_(
+        exists().where(PerformanceObligation.contract_version_id == ContractVersion.id),
+        (ContractVersion.event_type == ContractEventType.CANCELLATION) & ~still_active,
+    )
     return (
         select(
             Contract.id,
@@ -288,6 +303,7 @@ def get_contract_billing(contract_id: int, db: DbSession) -> ContractBillingOut:
                 opening_unbilled=from_cents(r.opening_unbilled),
                 billings=from_cents(r.billings),
                 credit_notes=from_cents(r.credit_notes),
+                adjustments=from_cents(r.adjustments),
                 recognised=from_cents(r.recognised),
                 recognised_from_deferred=from_cents(r.recognised_from_deferred),
                 closing_deferred=from_cents(r.closing_deferred),
@@ -438,4 +454,32 @@ def get_contract_schedule(
     )
 
 
-stub(router, "GET", "/{contract_id}/journal-lines", Role.UPLOADER, "P4-T4")
+@router.get(
+    "/{contract_id}/journal-lines",
+    response_model=Page[JournalLineOut],
+    responses=CSV,
+    dependencies=CanRead,
+)
+def list_contract_journal_lines(
+    contract_id: int,
+    db: DbSession,
+    params: Listing,
+    period_from: PeriodFilter = None,
+    period_to: PeriodFilter = None,
+) -> Any:
+    """Every journal line of this contract, from any batch (plan §9, drill-down)."""
+    _require_contract(db, contract_id)
+    statement = journal_lines_query().where(JournalEntry.contract_id == contract_id)
+    if period_from is not None:
+        statement = statement.where(AccountingPeriod.period_key >= period_from)
+    if period_to is not None:
+        statement = statement.where(AccountingPeriod.period_key <= period_to)
+    statement = apply_sort(
+        statement,
+        params.sort,
+        JOURNAL_LINE_SORTS,
+        [AccountingPeriod.period_key, JournalLine.entry_id, JournalLine.id],
+    )
+    return list_response(
+        db, statement, params, JournalLineOut, f"contract_{contract_id}_journal_lines.csv"
+    )

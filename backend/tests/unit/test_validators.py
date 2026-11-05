@@ -227,7 +227,7 @@ def test_e010_event_before_the_current_period() -> None:
         contracts="K-OLD,CUST-1,2026-01-01,2026-12-31,CANCELLATION,2026-05-31",
     )
     assert codes(result, "contracts") == [["E010"]]
-    accepted = run(contracts="K-OLD,CUST-1,2026-01-01,2026-12-31,CANCELLATION,2026-06-01")
+    accepted = run(contracts="K-OLD,CUST-1,2026-01-01,2026-12-31,CANCELLATION,2026-06-30")
     assert codes(accepted, "contracts") == [[]]
 
 
@@ -304,3 +304,50 @@ def test_deliveries_add_up_across_the_database_and_the_file() -> None:
         existing, deliveries="DLV-1,K-OLD,2,2026-03-31,0.25\nDLV-2,K-OLD,2,2026-04-30,0.01"
     )
     assert codes(result, "deliveries") == [[], ["E009"]]
+
+
+# --------------------------------------------------------------------------- events (P4-T1)
+
+
+def test_e012_monthly_line_can_only_be_cancelled_at_a_month_end() -> None:
+    result = run(contracts="K-OLD,CUST-1,2026-01-01,2026-12-31,CANCELLATION,2026-06-15")
+    assert codes(result, "contracts") == [["E012"]]
+
+
+def test_e012_monthly_line_can_only_be_upgraded_from_the_first() -> None:
+    result = run(
+        contracts="K-OLD,CUST-1,2026-01-01,2026-12-31,UPGRADE,2026-07-15",
+        contract_lines="K-OLD,3,DAILY,1,100.00,,2026-07-15,2026-12-31,",
+    )
+    assert "E012" in codes(result, "contracts")[0]
+    fine = run(
+        contracts="K-OLD,CUST-1,2026-01-01,2026-12-31,UPGRADE,2026-07-01",
+        contract_lines="K-OLD,3,DAILY,1,100.00,,2026-07-01,2026-12-31,",
+    )
+    assert codes(fine, "contracts") == [[]] and codes(fine, "contract_lines") == [[]]
+
+
+def test_e007_added_line_cannot_start_before_the_upgrade() -> None:
+    result = run(
+        contracts="K-OLD,CUST-1,2026-01-01,2026-12-31,UPGRADE,2026-07-01",
+        contract_lines="K-OLD,3,DAILY,1,100.00,,2026-06-20,2026-12-31,",
+    )
+    assert codes(result, "contract_lines") == [["E007"]]
+
+
+def test_e009_a_cancelled_contract_has_no_further_events() -> None:
+    cancelled = replace(EXISTING.contracts["K-OLD"], cancelled=True)
+    existing = replace(EXISTING, contracts={"K-OLD": cancelled})
+    for event, date_text in (("CANCELLATION", "2026-06-30"), ("UPGRADE", "2026-07-01")):
+        lines = "K-OLD,3,DAILY,1,100.00,,2026-07-01,2026-12-31," if event == "UPGRADE" else None
+        files = {"contract_lines": lines} if lines else {}
+        result = run(
+            existing, contracts=f"K-OLD,CUST-1,2026-01-01,2026-12-31,{event},{date_text}", **files
+        )
+        assert codes(result, "contracts") == [["E009"]]
+    renewal = run(
+        existing,
+        contracts="K-OLD,CUST-1,2027-01-01,2027-12-31,RENEWAL,2027-01-01",
+        contract_lines="K-OLD,1,SUB,1,100.00,,2027-01-01,2027-12-31,",
+    )
+    assert codes(renewal, "contracts") == [["E009"]]

@@ -16,6 +16,9 @@ from tests.integration.conftest import make_user
 REPO = Path(__file__).resolve().parents[3]
 U01 = REPO / "benchmarks" / "cases" / "U01_ratable_monthly_12m"
 B01 = REPO / "benchmarks" / "cases" / "B01_worked_example"
+J01 = REPO / "benchmarks" / "cases" / "J01_invoice_in_advance"
+J02 = REPO / "benchmarks" / "cases" / "J02_credit_note_unrecognised"
+E03 = REPO / "benchmarks" / "cases" / "E03_upgrade"
 
 
 def _seed_module() -> ModuleType:
@@ -54,8 +57,11 @@ def tampered(tmp_path: Path, source: Path, file: str, old: str, new: str) -> Pat
             "postings",
         ),
         (B01, "balances.csv", "10266.67", "10266.70", "balances"),
+        (J01, "postings.csv", "1,INVOICE,1200.00", "1,INVOICE,1200.05", "postings"),
+        (J02, "postings.csv", "0,CREDIT_NOTE,300.00", "0,CREDIT_NOTE,300.05", "postings"),
+        (E03, "allocation.csv", "E03,1,2,1644.17", "E03,1,2,1644.27", "allocation"),
     ],
-    ids=["schedule", "allocation", "postings", "balances"],
+    ids=["schedule", "allocation", "postings", "balances", "invoice", "credit-note", "upgrade"],
 )
 def test_a_wrong_expected_value_fails_the_case(
     db: Session, tmp_path: Path, source: Path, file: str, old: str, new: str, check: str
@@ -92,3 +98,20 @@ def test_just_over_the_tolerance_fails(db: Session, tmp_path: Path) -> None:
         make_user,
     )
     assert not result.passed
+
+
+def test_a_broken_ledger_fails_even_when_the_amounts_match(
+    db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The GL/sub-ledger tie is checked separately: send every revenue debit to the wrong account
+    and each compared amount is still right, but the case must fail."""
+    from app.engine import journal_rules
+
+    real = journal_rules.split_revenue
+    monkeypatch.setattr(
+        "app.services.journals.split_revenue",
+        lambda position, amount: tuple(reversed(real(position, amount))),
+    )
+    result = replay(db, J01, seed, make_user)
+    assert not result.failures
+    assert any("sub-ledger" in problem for problem in result.problems)

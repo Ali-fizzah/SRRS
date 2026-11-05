@@ -1,8 +1,9 @@
-"""Recognition run (plan §5.2-5.4, §10). Tasks P2-T3, P3-T2, P3-T3, P3-T4.
+"""Recognition run (plan §5.2-5.5, §10). Tasks P2-T3, P3-T2, P3-T3, P3-T4, P4-T1.
 
 For period P:
-1. Generate obligations, schedules and PENDING lines for contracts whose current version has
-   none yet: resolve SSP, allocate, and call the recognition method (all pure engine code).
+1. Handle each contract version not handled yet, oldest first: NEW and RENEWAL generate
+   obligations, schedules and PENDING lines; UPGRADE and CANCELLATION change the schedules
+   already there (contract_events.py).
 2. Rebuild point-in-time schedules when deliveries arrived after they were generated (D3).
 3. Assign posting period P to every unassigned PENDING line earned in P or earlier; lines
    earned before P are catch-up (D5, §5.4). Later lines stay PENDING.
@@ -14,22 +15,15 @@ reported and left untouched, so a later run picks them up.
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date
 
 from sqlalchemy import select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.audit import write_audit
 from app.engine.allocation import AllocationLine, NoSeparateObligationError, allocate
-from app.engine.methods import (
-    DeliveryTranche,
-    ScheduleAmount,
-    point_in_time,
-    ratable_daily,
-    ratable_monthly,
-)
+from app.engine.methods import DeliveryTranche, point_in_time
 from app.engine.money import from_cents, to_cents, to_scaled
-from app.engine.ssp import SspRuleData, line_ssp_cents, rule_on
+from app.engine.ssp import SspRuleData
 from app.models import (
     AccountingPeriod,
     Contract,
@@ -50,12 +44,22 @@ from app.models.enums import (
     ScheduleLineStatus,
     ScheduleStatus,
 )
+from app.services.contract_events import (
+    PlannedObligation,
+    SkipContractError,
+    apply_cancellation,
+    apply_upgrade,
+    line_ssp,
+    load_deliveries,
+    save_obligation,
+    schedule_for,
+)
 
 
 @dataclass(frozen=True)
 class SkippedContract:
     contract_code: str
-    reason: str  # UNSUPPORTED_EVENT, NO_SSP_RULE, NO_SEPARATE_OBLIGATION, ...
+    reason: str  # NO_SSP_RULE, NO_SEPARATE_OBLIGATION, EVENT_AFTER_POSTING, ...
     message: str
 
 
@@ -65,25 +69,11 @@ class RunSummary:
     obligations_created: int = 0
     schedule_lines_created: int = 0
     schedules_rebuilt: int = 0
+    events_applied: int = 0
+    drafts_discarded: int = 0
     lines_booked: int = 0
     catch_up_lines: int = 0
     skipped: list[SkippedContract] = field(default_factory=list)
-
-
-class _SkipContractError(Exception):
-    def __init__(self, reason: str, message: str) -> None:
-        super().__init__(message)
-        self.reason = reason
-        self.message = message
-
-
-@dataclass(frozen=True)
-class _PlannedObligation:
-    line: ContractLine
-    product: Product
-    ssp_cents: int
-    allocated_cents: int
-    schedule: list[ScheduleAmount]
 
 
 def run_recognition(
@@ -103,7 +93,7 @@ def run_recognition(
         )
 
     summary = RunSummary()
-    _generate(db, summary, job_id)
+    _generate(db, summary, job_id, user_id)
     report(50)
     _rebuild_for_deliveries(db, summary)
     report(70)
@@ -124,6 +114,8 @@ def run_recognition(
             "obligations_created": summary.obligations_created,
             "schedule_lines_created": summary.schedule_lines_created,
             "schedules_rebuilt": summary.schedules_rebuilt,
+            "events_applied": summary.events_applied,
+            "drafts_discarded": summary.drafts_discarded,
             "lines_booked": summary.lines_booked,
             "catch_up_lines": summary.catch_up_lines,
             "skipped": [{"contract": s.contract_code, "reason": s.reason} for s in summary.skipped],
@@ -135,36 +127,89 @@ def run_recognition(
 # --------------------------------------------------------------------------- 1. generate
 
 
-def _generate(db: Session, summary: RunSummary, job_id: int | None) -> None:
-    versions = list(
+def _generate(db: Session, summary: RunSummary, job_id: int | None, user_id: int | None) -> None:
+    """Handle every version still to do, oldest first per contract (§5.5). If a version is
+    refused, that contract's later versions wait too: they build on it."""
+    versions = _versions_to_process(db)
+    lines_of, rules_of, deliveries_of = _load_inputs(db, [version.id for version, _ in versions])
+    blocked: set[str] = set()
+    for version, code in versions:
+        if code in blocked:
+            continue
+        try:
+            if version.event_type == ContractEventType.CANCELLATION:
+                applied, discarded = apply_cancellation(db, version, user_id)
+                summary.drafts_discarded += discarded
+                summary.events_applied += int(applied)
+            elif version.event_type == ContractEventType.UPGRADE:
+                plan, discarded = apply_upgrade(
+                    db,
+                    version,
+                    lines_of[version.id],
+                    rules_of,
+                    deliveries_of,
+                    job_id,
+                    user_id,
+                )
+                summary.drafts_discarded += discarded
+                summary.events_applied += 1
+                summary.obligations_created += len(plan)
+                summary.schedule_lines_created += sum(len(p.schedule) for p in plan)
+            else:
+                plan = _plan_contract(version, lines_of[version.id], rules_of, deliveries_of)
+                for planned in plan:
+                    save_obligation(db, version.id, planned, job_id)
+                    summary.obligations_created += 1
+                    summary.schedule_lines_created += len(planned.schedule)
+                summary.contracts_generated += 1
+        except SkipContractError as skip:
+            summary.skipped.append(SkippedContract(code, skip.reason, skip.message))
+            blocked.add(code)
+    db.flush()
+
+
+def _versions_to_process(db: Session) -> list[tuple[ContractVersion, str]]:
+    """NEW, RENEWAL and UPGRADE versions without obligations yet, and CANCELLATION versions whose
+    contract still has obligations to stop or versions to build first."""
+    older = aliased(ContractVersion)
+    active_obligation = (
+        select(PerformanceObligation.id)
+        .join(older, older.id == PerformanceObligation.contract_version_id)
+        .where(
+            older.contract_id == ContractVersion.contract_id,
+            PerformanceObligation.status == ObligationStatus.ACTIVE,
+        )
+        .exists()
+    )
+    no_obligations = ~(
+        select(PerformanceObligation.id)
+        .where(PerformanceObligation.contract_version_id == ContractVersion.id)
+        .exists()
+    )
+    older_to_build = (
+        select(older.id)
+        .where(
+            older.contract_id == ContractVersion.contract_id,
+            older.version_no < ContractVersion.version_no,
+            older.event_type != ContractEventType.CANCELLATION,
+            ~select(PerformanceObligation.id)
+            .where(PerformanceObligation.contract_version_id == older.id)
+            .exists(),
+        )
+        .exists()
+    )
+    is_cancellation = ContractVersion.event_type == ContractEventType.CANCELLATION
+    return list(
         db.execute(
             select(ContractVersion, Contract.contract_code)
-            .join(
-                Contract,
-                (Contract.id == ContractVersion.contract_id)
-                & (Contract.current_version_no == ContractVersion.version_no),
-            )
+            .join(Contract, Contract.id == ContractVersion.contract_id)
             .where(
-                ~select(PerformanceObligation.id)
-                .where(PerformanceObligation.contract_version_id == ContractVersion.id)
-                .exists()
+                (~is_cancellation & no_obligations)
+                | (is_cancellation & (active_obligation | older_to_build))
             )
-            .order_by(Contract.contract_code)
+            .order_by(Contract.contract_code, ContractVersion.version_no)
         ).tuples()
     )
-    lines_of, rules_of, deliveries_of = _load_inputs(db, [version.id for version, _ in versions])
-    for version, code in versions:
-        try:
-            plan = _plan_contract(version, lines_of[version.id], rules_of, deliveries_of)
-        except _SkipContractError as skip:
-            summary.skipped.append(SkippedContract(code, skip.reason, skip.message))
-            continue
-        for planned in plan:
-            _save(db, version, planned, job_id)
-            summary.obligations_created += 1
-            summary.schedule_lines_created += len(planned.schedule)
-        summary.contracts_generated += 1
-    db.flush()
 
 
 def _load_inputs(
@@ -198,18 +243,7 @@ def _load_inputs(
             )
         )
     line_ids = [line.id for rows in lines_of.values() for line, _ in rows]
-    return lines_of, rules_of, _load_deliveries(db, line_ids)
-
-
-def _load_deliveries(db: Session, line_ids: list[int]) -> dict[int, list[DeliveryTranche]]:
-    deliveries_of: dict[int, list[DeliveryTranche]] = defaultdict(list)
-    for delivery in db.scalars(
-        select(Delivery).where(Delivery.contract_line_id.in_(line_ids)).order_by(Delivery.id)
-    ):
-        deliveries_of[delivery.contract_line_id].append(
-            DeliveryTranche(delivery.delivery_date, to_scaled(delivery.units_fraction, 6))
-        )
-    return deliveries_of
+    return lines_of, rules_of, load_deliveries(db, line_ids)
 
 
 def _plan_contract(
@@ -217,27 +251,14 @@ def _plan_contract(
     lines: list[tuple[ContractLine, Product]],
     rules_of: dict[int, list[SspRuleData]],
     deliveries_of: dict[int, list[DeliveryTranche]],
-) -> list[_PlannedObligation]:
-    """Work out one contract in memory, so a skipped contract writes nothing."""
-    if version.event_type != ContractEventType.NEW:
-        raise _SkipContractError(
-            "UNSUPPORTED_EVENT", f"{version.event_type.value} versions are built in task P4-T1."
-        )
-
-    ssp_cents: dict[int, int] = {}
-    for line, product in lines:
-        if not product.is_separate_obligation:
-            continue
-        rule = rule_on(rules_of[product.id], version.effective_date)
-        if rule is None:
-            raise _SkipContractError(
-                "NO_SSP_RULE",
-                f"Product {product.product_code} has no SSP rule on {version.effective_date}.",
-            )
-        ssp_cents[line.id] = line_ssp_cents(
-            rule, to_cents(product.list_price), to_scaled(line.quantity, 4)
-        )
-
+) -> list[PlannedObligation]:
+    """NEW and RENEWAL (§5.5): allocate and schedule in memory, so a skipped contract writes
+    nothing. A renewal has its own TP and allocation; the previous version is not touched."""
+    ssp_cents = {
+        line.id: line_ssp(line, product, rules_of, version.effective_date)
+        for line, product in lines
+        if product.is_separate_obligation
+    }
     try:
         allocations = allocate(
             [
@@ -251,14 +272,14 @@ def _plan_contract(
             ]
         )
     except NoSeparateObligationError as exc:
-        raise _SkipContractError("NO_SEPARATE_OBLIGATION", f"{exc.code}: {exc}") from exc
+        raise SkipContractError("NO_SEPARATE_OBLIGATION", f"{exc.code}: {exc}") from exc
 
     by_line_no = {line.line_no: (line, product) for line, product in lines}
     plan = []
     for allocation in allocations:
         line, product = by_line_no[allocation.line_no]
         try:
-            schedule = _schedule_for(
+            schedule = schedule_for(
                 product.recognition_method,
                 allocation.allocated_cents,
                 line.service_start,
@@ -267,63 +288,21 @@ def _plan_contract(
                 deliveries_of.get(line.id, []),
             )
         except ValueError as exc:
-            raise _SkipContractError("ENGINE_REFUSED", str(exc)) from exc
+            raise SkipContractError("ENGINE_REFUSED", str(exc)) from exc
         plan.append(
-            _PlannedObligation(
-                line, product, ssp_cents[line.id], allocation.allocated_cents, schedule
+            PlannedObligation(
+                contract_line_id=line.id,
+                product_id=product.id,
+                method=product.recognition_method,
+                ssp_cents=ssp_cents[line.id],
+                allocated_cents=allocation.allocated_cents,
+                service_start=line.service_start,
+                service_end=line.service_end,
+                completion_date=line.completion_date,
+                schedule=schedule,
             )
         )
     return plan
-
-
-def _schedule_for(
-    method: RecognitionMethod,
-    allocated_cents: int,
-    service_start: date,
-    service_end: date,
-    completion_date: date | None,
-    deliveries: list[DeliveryTranche],
-) -> list[ScheduleAmount]:
-    """Plan §5.3. The completion date defaults to service_end."""
-    if method == RecognitionMethod.RATABLE_MONTHLY:
-        return ratable_monthly(allocated_cents, service_start, service_end)
-    if method == RecognitionMethod.RATABLE_DAILY:
-        return ratable_daily(allocated_cents, service_start, service_end)
-    return point_in_time(allocated_cents, completion_date or service_end, deliveries)
-
-
-def _save(
-    db: Session, version: ContractVersion, planned: _PlannedObligation, job_id: int | None
-) -> None:
-    line, product = planned.line, planned.product
-    obligation = PerformanceObligation(
-        contract_version_id=version.id,
-        contract_line_id=line.id,
-        product_id=product.id,
-        method=product.recognition_method,
-        ssp_amount=from_cents(planned.ssp_cents),
-        allocated_amount=from_cents(planned.allocated_cents),
-        service_start=line.service_start,
-        service_end=line.service_end,
-        completion_date=line.completion_date,
-    )
-    db.add(obligation)
-    db.flush()
-    revenue_schedule = RevenueSchedule(
-        performance_obligation_id=obligation.id,
-        contract_version_id=version.id,
-        generated_by_job_id=job_id,
-    )
-    db.add(revenue_schedule)
-    db.flush()
-    db.add_all(
-        ScheduleLine(
-            schedule_id=revenue_schedule.id,
-            service_period=amount.service_period,
-            amount=from_cents(amount.amount_cents),
-        )
-        for amount in planned.schedule
-    )
 
 
 # --------------------------------------------------------------------------- 2. deliveries
@@ -353,7 +332,7 @@ def _rebuild_for_deliveries(db: Session, summary: RunSummary) -> None:
     )
     if not rows:
         return
-    deliveries_of = _load_deliveries(db, [po.contract_line_id for po, _, _ in rows])
+    deliveries_of = load_deliveries(db, [po.contract_line_id for po, _, _ in rows])
     for obligation, schedule_id, code in rows:
         lines = db.scalars(
             select(ScheduleLine).where(

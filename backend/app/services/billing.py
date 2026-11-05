@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.engine.balances import BillingEvent, PeriodBalance, roll_forward
 from app.engine.money import to_cents
-from app.engine.periods import period_key
 from app.models import (
     ContractVersion,
     CreditNote,
@@ -17,17 +16,13 @@ from app.models import (
     UploadFile,
 )
 from app.models.enums import ScheduleLineStatus
-
-
-def _posting_period(document_period: str, upload_period: str | None) -> str:
-    """D6: a document dated in a closed period posts to the period open when it was uploaded."""
-    return max(document_period, upload_period or document_period)
+from app.services.journals import document_posting_period, reversal_effects
 
 
 def billing_events(db: Session, contract_id: int) -> list[BillingEvent]:
     events = [
         BillingEvent(
-            _posting_period(period_key(when), upload_period), when, number, "INVOICE", to_cents(amt)
+            document_posting_period(when, upload_period), when, number, "INVOICE", to_cents(amt)
         )
         for number, when, amt, upload_period in db.execute(
             select(
@@ -42,7 +37,7 @@ def billing_events(db: Session, contract_id: int) -> list[BillingEvent]:
     ]
     events += [
         BillingEvent(
-            _posting_period(period_key(when), upload_period),
+            document_posting_period(when, upload_period),
             when,
             number,
             "CREDIT_NOTE",
@@ -85,7 +80,11 @@ def recognised_by_period(db: Session, contract_id: int) -> dict[str, int]:
 
 def contract_balances(db: Session, contract_id: int) -> list[PeriodBalance]:
     """The contract's deferred / unbilled rollforward, one row per period with activity."""
-    return roll_forward(billing_events(db, contract_id), recognised_by_period(db, contract_id))
+    return roll_forward(
+        billing_events(db, contract_id),
+        recognised_by_period(db, contract_id),
+        reversal_effects(db, contract_id),
+    )
 
 
 def balance_at(rows: list[PeriodBalance], period: str) -> tuple[int, int]:

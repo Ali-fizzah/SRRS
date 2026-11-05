@@ -295,14 +295,6 @@ def test_one_contract_that_cannot_run_does_not_stop_the_others(db: Session, user
     assert db.scalar(select(func.count()).select_from(PerformanceObligation)) == 1
 
 
-def test_contract_changed_by_an_event_waits_for_p4_t1(db: Session, user_id: int) -> None:
-    new_contract(db, user_id, "K", "1,SUB,1,1200.00,,2025-01-01,2025-12-31,")
-    upload(db, user_id, contracts="K,C1,2025-01-01,2025-12-31,CANCELLATION,2025-06-30")
-    summary = run_recognition(db, user_id)
-    assert reasons(summary) == {"K": "UNSUPPORTED_EVENT"}
-    assert amounts(db) == []  # the NEW version must not get a full schedule any more
-
-
 def test_no_ssp_rule_on_the_effective_date_is_reported(db: Session, user_id: int) -> None:
     upload(db, user_id, products="P,P,,10.00,LIST_PRICE,,,RATABLE_MONTHLY,Y,4100,2025-06-01")
     upload(db, user_id, customers="C1,Acme,GB")

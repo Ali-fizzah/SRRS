@@ -37,7 +37,7 @@ Do this **the day before**, then once more 30 minutes before you present.
 | 3:10 | Click **000102-SUB**. | "This is the check from our proposal. 11,200 over 12 months is 933.33 a month. The last month absorbs the rounding, so it is 933.37, and the total matches the price to the cent." | 933.33 × 11, then **933.37**. Total **11,200.00** |
 | 3:50 | **All contracts**, then **000104-SUB**. | "This customer also paid a 500 setup fee. It is not a separate obligation, so it is spread through the subscription: 1,700 over 12 months." | 141.67 × 11, then **141.63**. Total **1,700.00** |
 | 4:20 | **All contracts**, then **Run recognition** again. | "Running it twice is safe: nothing is generated twice." | "Nothing new to schedule." |
-| 4:35 | Close. | "Upload, validation, database, schedule, grid, all on the real engine, nothing throwaway. Next: contract events, journals and period close." | |
+| 4:35 | Close. | "Upload, validation, database, schedule, grid, all on the real engine, nothing throwaway. Next: period close and the reports." | |
 
 ## What each contract shows
 
@@ -76,7 +76,7 @@ The price is shared by relative SSP, and any rounding difference goes to the lar
 No. Database triggers refuse it, even from a bug in our own code. Corrections will be new reversal entries (plan §6.3).
 
 **What about the other pages in the menu?**
-Master data and uploads are built. The dashboard, journals, periods and reports show placeholders naming the task that builds them.
+Master data, uploads, contracts and journals are built. The dashboard, periods and reports show placeholders naming the task that builds them.
 
 ## If something goes wrong
 

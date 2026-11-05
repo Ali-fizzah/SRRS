@@ -1,15 +1,18 @@
 # Benchmark case (plan §11.2-11.3). Expected values are owned by M1.
-# Never edit expected/ to make a test pass; record confirmed benchmark fixes under notes.
+# Never edit expected/ to make a test pass;
+# record confirmed benchmark fixes under notes.
 id: E02
 level: Events
 description: Cancellation in month 5 + credit note
 key_expected: recognition stops; deferred reversed
 owner: M1
-source: null           # workbook or hand calculation the expected values come from
-open_period: null      # YYYYMM open at the start of the replay
-periods:               # replay months, inclusive (YYYYMM)
-  from: null
-  to: null
+source: plan §5.5-5.7 and §11.3; computed with exact fractions, independently of the
+  engine
+open_period: '202501'
+periods:
+  from: '202501'
+  to: '202512'
 tolerance: '0.01'
-status: stub           # stub -> ready once inputs/ and expected/ are filled
-notes: []
+status: ready
+notes:
+- 'DRAFT by the developers: M1 must confirm these expected values (plan §11.3, P4-T6).'

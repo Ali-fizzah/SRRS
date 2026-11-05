@@ -78,6 +78,72 @@ def ratable_daily(
     return amounts
 
 
+def ratable_monthly_through(
+    allocated_cents: int, service_start: date, service_end: date, as_of: date
+) -> list[ScheduleAmount]:
+    """Plan §5.5: what RATABLE_MONTHLY has earned through `as_of`, which must be a month end
+    (uploads check this as E012; the engine refuses it too)."""
+    if as_of < service_start:
+        return []
+    schedule = ratable_monthly(allocated_cents, service_start, service_end)
+    if as_of >= service_end:
+        return schedule
+    if as_of != period_bounds(period_key(as_of))[1]:
+        raise ValueError(f"RATABLE_MONTHLY can only stop at a month end, got {as_of}")
+    return [amount for amount in schedule if amount.service_period <= period_key(as_of)]
+
+
+def ratable_daily_through(
+    allocated_cents: int, service_start: date, service_end: date, as_of: date
+) -> list[ScheduleAmount]:
+    """Plan §5.5: what RATABLE_DAILY has earned through `as_of`: cumulative days to that date,
+    with the same cumulative rounding as the full schedule (§5.3)."""
+    if as_of < service_start:
+        return []
+    schedule = ratable_daily(allocated_cents, service_start, service_end)
+    if as_of >= service_end:
+        return schedule
+    last = period_key(as_of)
+    earlier = [amount for amount in schedule if amount.service_period < last]
+    total_days = (service_end - service_start).days + 1
+    days = (as_of - service_start).days + 1
+    cumulative = round_half_up_div(allocated_cents * days, total_days)
+    return [*earlier, ScheduleAmount(last, cumulative - sum(a.amount_cents for a in earlier))]
+
+
+def point_in_time_through(
+    allocated_cents: int,
+    completion_date: date,
+    deliveries: Sequence[DeliveryTranche],
+    as_of: date,
+) -> list[ScheduleAmount]:
+    """Plan §5.5: what POINT_IN_TIME has earned through `as_of`: the deliveries made by then, and
+    the remainder only if the obligation was completed by then."""
+    if completion_date <= as_of:
+        return point_in_time(allocated_cents, completion_date, deliveries)
+    by_period: dict[str, int] = defaultdict(int)
+    for delivery in deliveries:
+        if delivery.delivery_date <= as_of:
+            by_period[period_key(delivery.delivery_date)] += round_half_up_div(
+                allocated_cents * delivery.fraction_e6, 1_000_000
+            )
+    return [
+        ScheduleAmount(period, by_period[period])
+        for period in sorted(by_period)
+        if by_period[period] != 0
+    ]
+
+
+def remaining_ssp_basis(
+    ssp_cents: int, service_start: date, service_end: date, effective: date
+) -> int:
+    """D8: SSP x remaining service days / total service days, for a ratable obligation that
+    continues through an upgrade effective on `effective`."""
+    total_days = (service_end - service_start).days + 1
+    remaining_days = (service_end - max(effective, service_start)).days + 1
+    return round_half_up_div(ssp_cents * max(remaining_days, 0), total_days)
+
+
 def point_in_time(
     allocated_cents: int,
     completion_date: date,

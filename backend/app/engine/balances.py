@@ -33,18 +33,27 @@ class PeriodBalance:
     closing_unbilled: int
     # Credit beyond the deferred balance. Uploads refuse this (E009, §5.6), so it should stay 0.
     credit_excess: int = 0
+    # Posted reversal entries (§5.7): + raises the position, - lowers it. It keeps this rollforward
+    # equal to the GL, because a reversal changes the GL but not the billing documents or schedule.
+    adjustments: int = 0
 
 
 def roll_forward(
-    events: Sequence[BillingEvent], revenue_by_period: Mapping[str, int]
+    events: Sequence[BillingEvent],
+    revenue_by_period: Mapping[str, int],
+    adjustments_by_period: Mapping[str, int] | None = None,
 ) -> list[PeriodBalance]:
-    """One row per period with activity: opening + billings - credit notes - recognised = closing.
+    """One row per period with activity:
+    opening + billings - credit notes + adjustments - recognised = closing.
 
     The whole calculation is one running figure, billed minus recognised: positive is deferred
     revenue, negative is unbilled. It gives the §5.6 rules directly: an invoice clears unbilled
     first and the rest is deferred; revenue uses deferred first and the rest is unbilled.
     """
-    periods = sorted({event.posting_period for event in events} | set(revenue_by_period))
+    adjustments = adjustments_by_period or {}
+    periods = sorted(
+        {event.posting_period for event in events} | set(revenue_by_period) | set(adjustments)
+    )
     rows = []
     position = 0
     for period in periods:
@@ -59,6 +68,7 @@ def roll_forward(
                 credit_notes += event.amount_cents
                 credit_excess += max(event.amount_cents - max(position, 0), 0)
                 position -= event.amount_cents
+        position += adjustments.get(period, 0)
         before_revenue = position
         recognised = revenue_by_period.get(period, 0)
         position -= recognised
@@ -74,6 +84,7 @@ def roll_forward(
                 closing_deferred=max(position, 0),
                 closing_unbilled=max(-position, 0),
                 credit_excess=credit_excess,
+                adjustments=adjustments.get(period, 0),
             )
         )
     return rows

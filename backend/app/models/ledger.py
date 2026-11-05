@@ -64,6 +64,22 @@ class JournalEntry(Base):
     """Every entry carries contract, version, source document and source upload row (§5.7)."""
 
     __tablename__ = "journal_entries"
+    __table_args__ = (
+        # A document is booked once, and an entry is reversed once, whatever a bug or a race does.
+        Index(
+            "uq_journal_entries_one_per_document",
+            "entry_type",
+            "source_id",
+            unique=True,
+            postgresql_where=text("entry_type IN ('INVOICE', 'CREDIT_NOTE')"),
+        ),
+        Index(
+            "uq_journal_entries_one_reversal",
+            "reverses_entry_id",
+            unique=True,
+            postgresql_where=text("reverses_entry_id IS NOT NULL"),
+        ),
+    )
 
     batch_id: Mapped[int] = fk("journal_batches.id")
     entry_type: Mapped[JournalEntryType] = mapped_column(

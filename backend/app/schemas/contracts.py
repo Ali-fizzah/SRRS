@@ -111,6 +111,7 @@ class PeriodBalanceOut(BaseModel):
     opening_unbilled: Decimal
     billings: Decimal
     credit_notes: Decimal
+    adjustments: Decimal  # posted reversal entries (plan §5.7)
     recognised: Decimal
     recognised_from_deferred: Decimal
     closing_deferred: Decimal

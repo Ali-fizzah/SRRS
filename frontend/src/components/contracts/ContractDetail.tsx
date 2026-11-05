@@ -17,13 +17,15 @@ import NextLink from "next/link";
 import { useState } from "react";
 
 import BillingTab from "@/components/contracts/BillingTab";
+import JournalLinesTab from "@/components/contracts/JournalLinesTab";
 import ScheduleTab from "@/components/contracts/ScheduleTab";
 import SourceRowsTab from "@/components/contracts/SourceRowsTab";
 import VersionTabs from "@/components/contracts/VersionTabs";
 import { apiGet, type Schemas } from "@/lib/api/client";
 import { formatMoney, formatPeriod } from "@/lib/format";
 
-type TabName = "schedule" | "lines" | "obligations" | "versions" | "billing" | "source";
+type TabName =
+  "schedule" | "lines" | "obligations" | "versions" | "billing" | "journals" | "source";
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
@@ -90,6 +92,7 @@ export default function ContractDetail({ id }: { id: string }) {
             <Tab value="obligations" label="Obligations" />
             <Tab value="versions" label="Versions" />
             <Tab value="billing" label="Billing" />
+            <Tab value="journals" label="Journals" />
             <Tab value="source" label="Source rows" />
           </Tabs>
           {tab === "schedule" && <ScheduleTab id={id} />}
@@ -97,6 +100,7 @@ export default function ContractDetail({ id }: { id: string }) {
             <VersionTabs contract={data} id={id} tab={tab} />
           )}
           {tab === "billing" && <BillingTab id={id} />}
+          {tab === "journals" && <JournalLinesTab id={id} />}
           {tab === "source" && <SourceRowsTab id={id} />}
         </Box>
       )}

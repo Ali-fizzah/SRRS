@@ -20,6 +20,8 @@ type RunResult = {
   contracts_generated: number;
   schedule_lines_created: number;
   schedules_rebuilt: number;
+  events_applied: number;
+  drafts_discarded: number;
   lines_booked: number;
   catch_up_lines: number;
   skipped: { contract_code: string; reason: string; message: string }[];
@@ -36,6 +38,13 @@ function runSummary(result: RunResult, period: string | undefined): string {
   }
   if (result.schedules_rebuilt > 0) {
     parts.push(`${result.schedules_rebuilt} schedules updated for new deliveries.`);
+  }
+  if (result.events_applied > 0) {
+    const plural = result.events_applied === 1 ? "" : "s";
+    parts.push(`${result.events_applied} contract event${plural} applied.`);
+  }
+  if (result.drafts_discarded > 0) {
+    parts.push("A draft journal batch was discarded because its lines changed; generate it again.");
   }
   if (result.lines_booked > 0) {
     parts.push(
@@ -81,7 +90,7 @@ export default function RecognitionRunCard() {
             </Typography>
             <Typography color="text.secondary">
               {current
-                ? `Builds revenue schedules for new contracts. Current period: ${formatPeriod(current)}.`
+                ? `Builds revenue schedules and applies contract events. Current period: ${formatPeriod(current)}.`
                 : "No period is open, so a run cannot start from here."}
             </Typography>
           </Box>
