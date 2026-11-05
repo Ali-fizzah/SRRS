@@ -13,7 +13,7 @@ from app.services.recognition_run import run_recognition
 
 def run_recognition_job(db: Session, job: JobRun, report: ReportProgress) -> dict[str, Any]:
     period_key = job.params["period_key"]
-    summary = run_recognition(db, job.created_by, job.id, report, period_key)
+    summary = run_recognition(db, job.created_by, job.id, report, period_key, commit_every=2000)
     return {"period_key": period_key, **asdict(summary)}
 
 

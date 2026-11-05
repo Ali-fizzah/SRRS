@@ -238,11 +238,6 @@ class Line:
         return half_up(self.quantity * product.list_cents * Fraction(product.pct or 0, 100))
 
 
-def _mentions(files: dict[str, list[list[str]]], code: str) -> bool:
-    """Does this month hold an invoice or delivery of this contract?"""
-    return any(code in row for name in ("invoices", "deliveries") for row in files.get(name, []))
-
-
 def _quantity_text(value: Fraction) -> str:
     return str(float(value))
 
@@ -256,7 +251,9 @@ class Builder:
         self.files: dict[str, dict[str, list[list[str]]]] = defaultdict(lambda: defaultdict(list))
         self.allocation: list[list[str]] = []
         self.schedule: dict[tuple[str, int, str], int] = defaultdict(int)
-        self.postings: dict[tuple[str, str, int, str], int] = defaultdict(int)
+        self.postings: dict[tuple[str, str, int, str], int] = defaultdict(int)  # this contract
+        self.all_postings: dict[tuple[str, str, int, str], int] = {}
+        self.document_months: dict[str, set[str]] = defaultdict(set)
         self.balances: list[list[str]] = []
         self.counter = {"invoice": 0, "credit": 0, "delivery": 0}
         self.stats: dict[str, int] = defaultdict(int)
@@ -353,6 +350,7 @@ class Builder:
                 [number, code, when.isoformat(), str(line_no), money(amount)]
             )
             self.postings[(upload, code, line_no, "INVOICE")] += amount
+            self.document_months[code].add(upload)
         self.stats["invoices"] += 1
         return number
 
@@ -377,6 +375,7 @@ class Builder:
 
     def contract(self, index: int, customer: str) -> int:
         rng = self.rng
+        self.postings = defaultdict(int)
         code = f"{index:09d}-INV_{106000000 + index}"
         booked = add_months(self.first, rng.randrange(self.booking_months))
         # D5: some contracts start before the month they are booked in, so they catch up.
@@ -405,6 +404,7 @@ class Builder:
                     ]
                 )
                 self.stats["deliveries"] += 1
+                self.document_months[code].add(upload)
 
         obligations = self._obligations(lines, 1, booked)
         for po, line in zip(obligations, [ln for ln in lines if ln.product.separate], strict=True):
@@ -425,6 +425,7 @@ class Builder:
         if self.profile == "full" and credit_candidates and rng.random() < 0.2:
             self._goodwill_credit(code, credit_candidates)
         self._record_balances(code)
+        self.all_postings.update(self.postings)
         return len(lines)
 
     def _billing(
@@ -482,7 +483,7 @@ class Builder:
         start = window[1] + timedelta(days=1)
         # Everything for the old term arrives first: after a renewal, only the new term's lines
         # can be referenced, and the plan does not define old-term documents (see validation-log).
-        earlier = [month for month, files in self.files.items() if _mentions(files, code)]
+        earlier = self.document_months[code]
         upload = max(key_of(window[1]), add_months(booked, 1), *[add_months(m, 1) for m in earlier])
         # Monthly lines need a window of whole months, so the new term starts on the next 1st.
         start_key = key_of(start) if start.day == 1 else add_months(key_of(start), 1)
@@ -680,10 +681,15 @@ class Builder:
 
 
 def generate(
-    out: Path, lines: int, seed: int, profile: str, first: str = "202501"
+    out: Path,
+    lines: int,
+    seed: int,
+    profile: str,
+    first: str = "202501",
+    booking_months: int = 12,
 ) -> dict[str, int]:
     """Write one case to `out`. Returns what it holds."""
-    builder = Builder(seed, profile, first, booking_months=12)
+    builder = Builder(seed, profile, first, booking_months)
     made, index = 0, 0
     customers: list[list[str]] = []
     while made < lines:
@@ -735,7 +741,7 @@ def generate(
     _write(
         expected / "postings.csv",
         ["posting_period", "contract_id", "line_no", "entry_type", "amount"],
-        [[p, c, str(n), k, money(v)] for (p, c, n, k), v in sorted(builder.postings.items())],
+        [[p, c, str(n), k, money(v)] for (p, c, n, k), v in sorted(builder.all_postings.items())],
     )
     _write(
         expected / "balances.csv",

@@ -19,12 +19,11 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
-from psycopg.types.json import Jsonb
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.audit import write_audit
-from app.db.base import Base
+from app.db.bulk import copy_rows
 from app.engine.money import from_cents
 from app.ingestion.parser import CellError, FileRejectedError, ParsedRow, parse_rows, read_table
 from app.ingestion.templates import TEMPLATES
@@ -146,7 +145,7 @@ def load_upload(
         errors = [e for r in rows for e in r.errors]
         if upload.id in file_errors:
             errors = [file_errors[upload.id]]
-        _copy(
+        copy_rows(
             db,
             ValidationError,
             ["upload_file_id", "row_number", "column_name", "error_code", "message", "raw_value"],
@@ -190,24 +189,6 @@ def load_upload(
         summaries.append(summary)
     db.flush()
     return summaries
-
-
-# --------------------------------------------------------------------------- COPY
-
-
-def _copy(db: Session, model: type[Base], columns: list[str], rows: Iterable[Sequence[Any]]) -> int:
-    """Bulk insert with PostgreSQL COPY inside the session's transaction.
-
-    Table and column names come from the models, never from user input.
-    """
-    raw = db.connection().connection.driver_connection
-    count = 0
-    statement = f"COPY {model.__tablename__} ({', '.join(columns)}) FROM STDIN"
-    with raw.cursor() as cursor, cursor.copy(statement) as copy:  # type: ignore[union-attr]
-        for row in rows:
-            copy.write_row([Jsonb(v) if isinstance(v, dict) else v for v in row])
-            count += 1
-    return count
 
 
 # --------------------------------------------------------------------------- snapshot
@@ -513,7 +494,7 @@ class _Writer:
         self._deliveries(self._ok(results[tpl.DELIVERIES]))
 
     def _customers(self, rows: list[Row]) -> None:
-        _copy(
+        copy_rows(
             self.db,
             Customer,
             [
@@ -542,7 +523,7 @@ class _Writer:
         accounts = self._ids(
             GlAccount.id, GlAccount.account_code, (r.values["revenue_gl_account"] for r in rows)
         )
-        _copy(
+        copy_rows(
             self.db,
             Product,
             [
@@ -575,7 +556,7 @@ class _Writer:
         products = self._ids(
             Product.id, Product.product_code, (r.values["product_id"] for r in rows)
         )
-        _copy(
+        copy_rows(
             self.db,
             SspRule,
             [
@@ -611,7 +592,7 @@ class _Writer:
             Customer.id, Customer.customer_code, (r.values["customer_id"] for r in headers)
         )
         new = [r for r in headers if r.values["event_type"] == ContractEventType.NEW]
-        _copy(
+        copy_rows(
             db,
             Contract,
             ["contract_code", "customer_id", "status", "current_version_no"],
@@ -654,7 +635,7 @@ class _Writer:
                 CENT, ROUND_HALF_UP
             )
 
-        _copy(
+        copy_rows(
             db,
             ContractVersion,
             [
@@ -708,7 +689,7 @@ class _Writer:
         products = self._ids(
             Product.id, Product.product_code, (r.values["product_id"] for r in lines)
         )
-        _copy(
+        copy_rows(
             db,
             ContractLine,
             [
@@ -765,7 +746,7 @@ class _Writer:
         for row in rows:
             first.setdefault(row.values["invoice_number"], row)
             totals[row.values["invoice_number"]] += row.values["amount"]
-        _copy(
+        copy_rows(
             self.db,
             Invoice,
             [
@@ -790,7 +771,7 @@ class _Writer:
         )
         invoices = self._ids(Invoice.id, Invoice.invoice_number, first)
         line_ids = self._line_ids(rows)
-        _copy(
+        copy_rows(
             self.db,
             InvoiceLine,
             [
@@ -821,7 +802,7 @@ class _Writer:
         invoices = self._ids(
             Invoice.id, Invoice.invoice_number, (r.values["invoice_number"] for r in rows)
         )
-        _copy(
+        copy_rows(
             self.db,
             CreditNote,
             [
@@ -852,7 +833,7 @@ class _Writer:
         if not rows:
             return
         line_ids = self._line_ids(rows)
-        _copy(
+        copy_rows(
             self.db,
             Delivery,
             [

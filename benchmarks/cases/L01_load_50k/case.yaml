@@ -5,11 +5,12 @@ level: Load
 description: Generated 50,000 contract lines
 key_expected: performance only (< 5 min)
 owner: M1
-source: null           # workbook or hand calculation the expected values come from
+source: tools/load_test.py (generated data; performance only)
 open_period: null      # YYYYMM open at the start of the replay
 periods:               # replay months, inclusive (YYYYMM)
   from: null
   to: null
 tolerance: '0.01'
-status: stub           # stub -> ready once inputs/ and expected/ are filled
-notes: []
+status: manual         # run by hand with make load N=50000; results in docs/performance.md
+notes:
+- 'Not part of make bench. Passed 256 s against the 300 s target: docs/performance.md.'

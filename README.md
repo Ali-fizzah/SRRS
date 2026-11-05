@@ -14,18 +14,29 @@ The browser only talks to `web`; Next.js forwards `/api/*` to `api`.
 
 ## Run with Docker (recommended)
 
-Requires Docker Desktop and `make`.
+Requires Docker Desktop (running, with "Engine running" showing) and `make`. On Windows, one way to get `make` is `winget install ezwinports.make`, then open a new terminal.
+
+In a terminal in the project folder:
 
 ```bash
-cp .env.example .env
-make dev          # builds and starts postgres, api, worker, web
+cp .env.example .env   # Windows PowerShell: copy .env.example .env
+make dev               # builds and starts postgres, api, worker, web; leave it running
 ```
 
-Open http://localhost:3000. The home page shows `API health: ok` when the rewrite reaches FastAPI.
+The first build can take 15 minutes or more. It is ready when http://localhost:3000 opens. Until the next step, the terminal shows database errors from the worker; that is normal. Open a **second** terminal in the same folder and set up the database once:
+
+```bash
+make migrate
+make seed
+```
+
+Open http://localhost:3000 and sign in with `admin@revrec.local` / `ChangeMe-Admin1`. The dashboard should show the current period and `API: ok`. **Change this password before using real data.**
+
+To learn the app, follow [docs/user-manual.md](docs/user-manual.md). To stop it, press Ctrl+C in the first terminal, or run `make down`; your data is kept. If a port is already in use, close whatever uses 3000, 8000 or 5432.
 
 ## Run without Docker
 
-Requires Python 3.12, Node.js 20+ and `make`. PostgreSQL 16 is needed from Phase 1 on.
+Requires Python 3.12, Node.js 20+, PostgreSQL 16 and `make`. Create a `revrec` user and database first, then run `alembic upgrade head` and `python ../tools/seed.py` from `backend/`.
 
 ```bash
 # backend (Windows: py -3.12 -m venv .venv  and  .venv\Scripts\activate)
@@ -57,11 +68,15 @@ make lint LOCAL=1
 | `make seed` | Admin user, chart of accounts, GL mappings, periods |
 | `make test` | Backend unit + integration tests |
 | `make bench` | Golden benchmark replay |
+| `make stress S=6 LINES=200` | More generated datasets, hunting for bugs |
+| `make report` | Run the benchmarks, then write `docs/test-report/test-report.md` and `.pdf` |
 | `make convert` | Regenerate benchmark cases X01/X02 from the Excel workbooks |
 | `make lint` | ruff + mypy (backend), eslint + tsc (frontend) |
-| `make load N=50000` | Performance run |
+| `make load N=50000` | Load test on its own database (`revrec_load`), never your data |
 
 ## Demo
+
+Other documents: [user manual](docs/user-manual.md), [performance results](docs/performance.md), [validation log](docs/validation-log.md), [security pass](docs/security-pass.md), [test report](docs/test-report/test-report.md).
 
 [docs/demo-fyp1.md](docs/demo-fyp1.md) is the scripted FYP-I walkthrough, with its dataset and
 screenshots. `make demo-reset CONFIRM=yes` **deletes all data in the development database** and

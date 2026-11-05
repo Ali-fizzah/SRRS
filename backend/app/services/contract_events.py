@@ -12,10 +12,12 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.db.bulk import analyze, copy_rows, reserve_ids
 from app.engine.allocation import AllocationLine, NoSeparateObligationError, allocate
 from app.engine.methods import (
     DeliveryTranche,
@@ -75,7 +77,7 @@ class PlannedObligation:
     carried_from_po_id: int | None = None
 
 
-LineWithProduct = tuple[ContractLine, Product]
+LineWithProduct = tuple[Any, Product]  # a contract line, or a row of the columns the engine reads
 
 
 def load_deliveries(db: Session, line_ids: Sequence[int]) -> dict[int, list[DeliveryTranche]]:
@@ -106,7 +108,7 @@ def schedule_for(
 
 
 def line_ssp(
-    line: ContractLine,
+    line: Any,
     product: Product,
     rules_of: Mapping[int, list[SspRuleData]],
     on_date: date,
@@ -120,38 +122,77 @@ def line_ssp(
     return line_ssp_cents(rule, to_cents(product.list_price), to_scaled(line.quantity, 4))
 
 
-def save_obligation(
-    db: Session, version_id: int, planned: PlannedObligation, job_id: int | None
+def save_obligations(
+    db: Session, planned: Sequence[tuple[int, PlannedObligation]], job_id: int | None
 ) -> None:
-    obligation = PerformanceObligation(
-        contract_version_id=version_id,
-        contract_line_id=planned.contract_line_id,
-        product_id=planned.product_id,
-        method=planned.method,
-        ssp_amount=from_cents(planned.ssp_cents),
-        allocated_amount=from_cents(planned.allocated_cents),
-        service_start=planned.service_start,
-        service_end=planned.service_end,
-        completion_date=planned.completion_date,
-        carried_from_po_id=planned.carried_from_po_id,
-    )
-    db.add(obligation)
+    """Write obligations, their schedules and PENDING lines with COPY (task P7-T2).
+
+    `planned` holds (contract version id, obligation).
+    """
+    if not planned:
+        return
     db.flush()
-    revenue_schedule = RevenueSchedule(
-        performance_obligation_id=obligation.id,
-        contract_version_id=version_id,
-        generated_by_job_id=job_id,
+    obligation_ids = reserve_ids(db, PerformanceObligation, len(planned))
+    schedule_ids = reserve_ids(db, RevenueSchedule, len(planned))
+    copy_rows(
+        db,
+        PerformanceObligation,
+        [
+            "id",
+            "contract_version_id",
+            "contract_line_id",
+            "product_id",
+            "method",
+            "ssp_amount",
+            "allocated_amount",
+            "service_start",
+            "service_end",
+            "completion_date",
+            "carried_from_po_id",
+        ],
+        (
+            (
+                obligation_id,
+                version_id,
+                po.contract_line_id,
+                po.product_id,
+                po.method.value,
+                from_cents(po.ssp_cents),
+                from_cents(po.allocated_cents),
+                po.service_start,
+                po.service_end,
+                po.completion_date,
+                po.carried_from_po_id,
+            )
+            for obligation_id, (version_id, po) in zip(obligation_ids, planned, strict=True)
+        ),
     )
-    db.add(revenue_schedule)
-    db.flush()
-    db.add_all(
-        ScheduleLine(
-            schedule_id=revenue_schedule.id,
-            service_period=amount.service_period,
-            amount=from_cents(amount.amount_cents),
-        )
-        for amount in planned.schedule
+    copy_rows(
+        db,
+        RevenueSchedule,
+        ["id", "performance_obligation_id", "contract_version_id", "generated_by_job_id"],
+        (
+            (schedule_id, obligation_id, version_id, job_id)
+            for schedule_id, obligation_id, (version_id, _) in zip(
+                schedule_ids, obligation_ids, planned, strict=True
+            )
+        ),
     )
+    copy_rows(
+        db,
+        ScheduleLine,
+        ["schedule_id", "service_period", "amount"],
+        (
+            (schedule_id, amount.service_period, from_cents(amount.amount_cents))
+            for schedule_id, (_, po) in zip(schedule_ids, planned, strict=True)
+            for amount in po.schedule
+        ),
+    )
+
+
+def refresh_statistics(db: Session) -> None:
+    """After a run of bulk writes, once: see app.db.bulk.analyze."""
+    analyze(db, PerformanceObligation, RevenueSchedule, ScheduleLine)
 
 
 # --------------------------------------------------------------------------- stopping a schedule
@@ -501,7 +542,6 @@ def apply_upgrade(
     discarded = _release_from_drafts(db, stops, user_id)
     for stop in stops:
         _apply_stop(db, stop)
-    for planned in plan:
-        save_obligation(db, version.id, planned, job_id)
-    db.flush()
+    save_obligations(db, [(version.id, planned) for planned in plan], job_id)
+    refresh_statistics(db)  # the next event on this contract reads what was just written
     return plan, discarded

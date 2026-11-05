@@ -39,8 +39,12 @@ def _unsigned_decisions(plan: Path) -> list[str]:
     return rows
 
 
+def _not_run_label(case: dict) -> str:
+    return {"stub": "Not built", "manual": "make load"}.get(case["status"], "NOT RUN")
+
+
 def _source(meta: dict) -> str:
-    if meta["status"] == "stub":
+    if meta["status"] in ("stub", "manual"):
         return "-"
     return "Workbook" if meta["level"] == "Excel" else "Developer draft"
 
@@ -199,7 +203,7 @@ def to_markdown(data: dict) -> str:
                 f"{row['compared']} | {row['max_variance']} | {row['over_tolerance']} |"
             )
         else:
-            label = "Not built" if case["status"] == "stub" else "NOT RUN"
+            label = _not_run_label(case)
             out.append(f"| {case['name']} | {case['level']} | {case['source']} | {label} | | | |")
     out += ["", "## How the differences spread", "", "| Difference | Amounts |", "|---|---:|"]
     for bucket in ("0", "up to 0.005", "above 0.005, below 0.01", "exactly 0.01", "over 0.01"):
@@ -312,7 +316,7 @@ def to_pdf(data: dict, path: Path) -> None:
                 ]
             )
         else:
-            label = "Not built" if case["status"] == "stub" else "NOT RUN"
+            label = _not_run_label(case)
             rows.append([case["name"], case["level"], case["source"], label, "", "", ""])
     _table(
         pdf,

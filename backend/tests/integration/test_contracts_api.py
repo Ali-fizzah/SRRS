@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 import app.jobs.worker  # noqa: F401  (registers what the real worker registers)
@@ -28,6 +28,7 @@ from app.models import (
     UploadFile,
 )
 from app.models.enums import JobType, PeriodStatus, UploadTemplate
+from app.services import recognition_run
 from app.services.recognition_run import run_recognition
 from tests.integration.conftest import make_user, sign_in
 
@@ -408,3 +409,44 @@ def test_closed_period_is_refused_and_closing_is_allowed(
     set_status(PeriodStatus.CLOSED)
     refused = stack.post("/api/v1/periods/202501/recognition-run")
     assert refused.status_code == 409 and refused.json()["error"]["code"] == "PERIOD_NOT_CURRENT"
+
+
+def test_a_chunked_run_that_fails_keeps_finished_contracts_and_carries_on(
+    stack: TestClient, committed: Factory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """P7-T1, plan §10: one transaction per chunk, and running again adds nothing twice."""
+    _post_files(
+        stack,
+        customers="C1,Acme,GB",
+        products=PRODUCTS,
+        contracts=(
+            "A,C1,2025-01-01,2025-12-31,NEW,2025-01-01\nB,C1,2025-01-01,2025-12-31,NEW,2025-01-01"
+        ),
+        contract_lines=(
+            "A,1,SUB,1,1200.00,,2025-01-01,2025-12-31,\nB,1,SUB,1,1200.00,,2025-01-01,2025-12-31,"
+        ),
+    )
+    run_next_job(committed)
+
+    real = recognition_run._plan_contract
+    calls: list[int] = []
+
+    def fails_on_the_second(*args: Any) -> Any:
+        calls.append(1)
+        if len(calls) == 2:
+            raise RuntimeError("the machine fell over")
+        return real(*args)
+
+    monkeypatch.setattr(recognition_run, "_plan_contract", fails_on_the_second)
+    with committed() as db, pytest.raises(RuntimeError):
+        recognition_run.run_recognition(db, period_key="202501", commit_every=1)
+    with committed() as db:
+        assert db.scalar(select(func.count()).select_from(ScheduleLine)) == 12  # A only, complete
+
+    monkeypatch.setattr(recognition_run, "_plan_contract", real)
+    with committed() as db:
+        summary = recognition_run.run_recognition(db, period_key="202501", commit_every=1)
+        db.commit()
+    assert summary.contracts_generated == 1
+    with committed() as db:
+        assert db.scalar(select(func.count()).select_from(ScheduleLine)) == 24  # A once, then B

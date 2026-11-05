@@ -27,7 +27,7 @@ def test_case_yaml_is_valid(case: Path) -> None:
     meta = yaml.safe_load((case / "case.yaml").read_text(encoding="utf-8"))
     assert case.name.startswith(meta["id"])
     assert meta["tolerance"] == "0.01"
-    assert meta["status"] in {"stub", "ready"}
+    assert meta["status"] in {"stub", "ready", "manual"}  # manual: run by `make load`, not here
     if meta["status"] == "ready":
         assert meta["open_period"] == meta["periods"]["from"]
         assert meta["periods"]["from"] <= meta["periods"]["to"]

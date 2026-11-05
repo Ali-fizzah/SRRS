@@ -6,14 +6,20 @@ from collections.abc import Iterator
 from datetime import date
 
 _KEY = re.compile(r"^(\d{4})(0[1-9]|1[0-2])$")
+_PARSED: dict[str, tuple[int, int]] = {}
 
 
 def parse_period(key: str) -> tuple[int, int]:
     """'202501' -> (2025, 1). Raises ValueError for anything else."""
+    known = _PARSED.get(key)
+    if known is not None:
+        return known
     match = _KEY.match(key)
     if match is None:
         raise ValueError(f"period key must be YYYYMM, got {key!r}")
-    return int(match.group(1)), int(match.group(2))
+    parsed = int(match.group(1)), int(match.group(2))
+    _PARSED[key] = parsed  # the same few dozen months come up hundreds of thousands of times
+    return parsed
 
 
 def period_key(d: date) -> str:

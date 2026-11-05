@@ -15,8 +15,8 @@ N ?= 50000
 
 .PHONY: dev down migrate seed test lint bench stress report convert erd load demo-reset
 
+# -V: renew the web container's node_modules volume, or new npm packages stay invisible.
 dev:
-	# -V: renew the web container's node_modules volume, or new npm packages stay invisible.
 	docker compose up --build -V
 
 down:
@@ -73,4 +73,4 @@ endif
 	docker compose restart worker
 
 load:
-	$(BACKEND) python ../tools/generate_dataset.py --lines $(N)
+	$(BACKEND) python ../tools/load_test.py --lines $(N)

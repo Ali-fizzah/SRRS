@@ -7,7 +7,7 @@ new REVERSAL entries, each in a batch of its own that goes through approve and p
 """
 
 from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.audit import write_audit
 from app.config import get_settings
+from app.db.bulk import analyze, copy_rows, copy_table, reserve_ids
 from app.engine.journal_rules import (
     GlResolver,
     MappingRow,
@@ -762,54 +763,105 @@ def _save_batch(
         raise ValueError(f"unbalanced batch: debit {total_debit}, credit {total_credit}")
 
     batch = _new_batch(db, period_id, user_id, total_debit, total_credit)
-    rows = [
-        JournalEntry(
-            batch_id=batch.id,
-            entry_type=entry.entry_type,
-            entry_date=entry.entry_date,
-            contract_id=entry.contract_id,
-            contract_version_id=entry.version_id,
-            source_type=entry.source_type,
-            source_id=entry.source_id,
-            source_upload_id=entry.upload_id,
-            source_row=entry.upload_row,
-            description=entry.description,
-        )
-        for entry in planned
-    ]
-    db.add_all(rows)
-    db.flush()
-
-    pairs = []
-    for entry, row in zip(planned, rows, strict=True):
-        for line in entry.lines:
-            journal_line = JournalLine(
-                entry_id=row.id,
-                account_id=line.account_id,
-                debit=from_cents(line.debit),
-                credit=from_cents(line.credit),
-                product_id=line.product_id,
-                performance_obligation_id=line.obligation_id,
+    entry_ids = reserve_ids(db, JournalEntry, len(planned))
+    copy_rows(
+        db,
+        JournalEntry,
+        [
+            "id",
+            "batch_id",
+            "entry_type",
+            "entry_date",
+            "contract_id",
+            "contract_version_id",
+            "source_type",
+            "source_id",
+            "source_upload_id",
+            "source_row",
+            "description",
+        ],
+        (
+            (
+                entry_id,
+                batch.id,
+                entry.entry_type.value,
+                entry.entry_date,
+                entry.contract_id,
+                entry.version_id,
+                entry.source_type,
+                entry.source_id,
+                entry.upload_id,
+                entry.upload_row,
+                entry.description,
             )
-            pairs.append((journal_line, line.schedule_line_ids))
-    db.add_all(journal_line for journal_line, _ in pairs)
-    db.flush()
+            for entry_id, entry in zip(entry_ids, planned, strict=True)
+        ),
+    )
 
-    links = [
-        {"id": schedule_line_id, "journal_line_id": journal_line.id}
-        for journal_line, schedule_line_ids in pairs
-        for schedule_line_id in schedule_line_ids
+    lines = [
+        (entry_id, line)
+        for entry_id, entry in zip(entry_ids, planned, strict=True)
+        for line in entry.lines
     ]
-    if links:
-        db.execute(update(ScheduleLine), links)
-    # A big batch changes these tables at once, and posting follows. Without fresh statistics
-    # PostgreSQL can pick a plan that takes minutes instead of milliseconds (found by P6-T3).
-    db.execute(text("ANALYZE journal_entries, journal_lines, schedule_lines"))
+    line_ids = reserve_ids(db, JournalLine, len(lines))
+    copy_rows(
+        db,
+        JournalLine,
+        [
+            "id",
+            "entry_id",
+            "account_id",
+            "debit",
+            "credit",
+            "product_id",
+            "performance_obligation_id",
+        ],
+        (
+            (
+                line_id,
+                entry_id,
+                line.account_id,
+                from_cents(line.debit),
+                from_cents(line.credit),
+                line.product_id,
+                line.obligation_id,
+            )
+            for line_id, (entry_id, line) in zip(line_ids, lines, strict=True)
+        ),
+    )
+    _link_schedule_lines(
+        db,
+        (
+            (schedule_line_id, line_id)
+            for line_id, (_, line) in zip(line_ids, lines, strict=True)
+            for schedule_line_id in line.schedule_line_ids
+        ),
+    )
+    # A big batch changes these tables at once, and posting follows (found by task P6-T3).
+    analyze(db, JournalEntry, JournalLine, ScheduleLine)
     summary.batch_id = batch.id
     summary.batch_no = batch.batch_no
-    summary.entries = len(rows)
+    summary.entries = len(planned)
     summary.total_debit = str(from_cents(total_debit))
     summary.total_credit = str(from_cents(total_credit))
+
+
+def _link_schedule_lines(db: Session, links: Iterable[tuple[int, int]]) -> None:
+    """Point schedule lines at their journal line, in one statement (task P7-T2)."""
+    db.execute(
+        text(
+            "CREATE TEMP TABLE IF NOT EXISTS journal_links "
+            "(schedule_line_id BIGINT, journal_line_id BIGINT) ON COMMIT DROP"
+        )
+    )
+    db.execute(text("TRUNCATE journal_links"))
+    copy_table(db, "journal_links", ["schedule_line_id", "journal_line_id"], links)
+    db.execute(
+        text(
+            "UPDATE schedule_lines SET journal_line_id = journal_links.journal_line_id "
+            "FROM journal_links WHERE schedule_lines.id = journal_links.schedule_line_id"
+        )
+    )
 
 
 def _new_batch(

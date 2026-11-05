@@ -15,9 +15,10 @@ reported and left untouched, so a later run picks them up.
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from sqlalchemy import select, update
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session, aliased, defer
 
 from app.audit import write_audit
 from app.engine.allocation import AllocationLine, NoSeparateObligationError, allocate
@@ -51,7 +52,8 @@ from app.services.contract_events import (
     apply_upgrade,
     line_ssp,
     load_deliveries,
-    save_obligation,
+    refresh_statistics,
+    save_obligations,
     schedule_for,
 )
 
@@ -82,10 +84,12 @@ def run_recognition(
     job_id: int | None = None,
     report: Callable[[int], None] = lambda progress: None,
     period_key: str | None = None,
+    commit_every: int | None = None,
 ) -> RunSummary:
     """Run for `period_key`, by default the OPEN period (D6). The caller commits.
 
-    `report` receives the percentage done after each stage (plan §10).
+    `report` receives the percentage done as it goes (plan §10). `commit_every` splits generation
+    into transactions of that many contract versions (plan §10); the rest of the run is one more.
     """
     if period_key is None:
         period_key = db.scalar(
@@ -93,7 +97,12 @@ def run_recognition(
         )
 
     summary = RunSummary()
-    _generate(db, summary, job_id, user_id)
+    keep_expiring = db.expire_on_commit
+    db.expire_on_commit = False  # the chunks keep using what they loaded
+    try:
+        _generate(db, summary, job_id, user_id, commit_every, report)
+    finally:
+        db.expire_on_commit = keep_expiring
     report(50)
     _rebuild_for_deliveries(db, summary)
     report(70)
@@ -127,45 +136,72 @@ def run_recognition(
 # --------------------------------------------------------------------------- 1. generate
 
 
-def _generate(db: Session, summary: RunSummary, job_id: int | None, user_id: int | None) -> None:
+def _generate(
+    db: Session,
+    summary: RunSummary,
+    job_id: int | None,
+    user_id: int | None,
+    commit_every: int | None,
+    report: Callable[[int], None],
+) -> None:
     """Handle every version still to do, oldest first per contract (§5.5). If a version is
-    refused, that contract's later versions wait too: they build on it."""
+    refused, that contract's later versions wait too: they build on it.
+
+    With `commit_every`, each chunk of versions is its own transaction (plan §10). A failure then
+    keeps the chunks already done, each complete, and running again carries on from there.
+    """
     versions = versions_to_process(db)
-    lines_of, rules_of, deliveries_of = _load_inputs(db, [version.id for version, _ in versions])
+    size = commit_every or max(len(versions), 1)
     blocked: set[str] = set()
-    for version, code in versions:
-        if code in blocked:
-            continue
-        try:
-            if version.event_type == ContractEventType.CANCELLATION:
-                applied, discarded = apply_cancellation(db, version, user_id)
-                summary.drafts_discarded += discarded
-                summary.events_applied += int(applied)
-            elif version.event_type == ContractEventType.UPGRADE:
-                plan, discarded = apply_upgrade(
-                    db,
-                    version,
-                    lines_of[version.id],
-                    rules_of,
-                    deliveries_of,
-                    job_id,
-                    user_id,
-                )
-                summary.drafts_discarded += discarded
-                summary.events_applied += 1
-                summary.obligations_created += len(plan)
-                summary.schedule_lines_created += sum(len(p.schedule) for p in plan)
-            else:
-                plan = _plan_contract(version, lines_of[version.id], rules_of, deliveries_of)
-                for planned in plan:
-                    save_obligation(db, version.id, planned, job_id)
-                    summary.obligations_created += 1
-                    summary.schedule_lines_created += len(planned.schedule)
-                summary.contracts_generated += 1
-        except SkipContractError as skip:
-            summary.skipped.append(SkippedContract(code, skip.reason, skip.message))
-            blocked.add(code)
-    db.flush()
+    for first in range(0, len(versions), size):
+        chunk = versions[first : first + size]
+        lines_of, rules_of, deliveries_of = _load_inputs(db, [version.id for version, _ in chunk])
+        waiting: list[tuple[int, PlannedObligation]] = []
+        for version, code in chunk:
+            if code in blocked:
+                continue
+            try:
+                if version.event_type in (
+                    ContractEventType.CANCELLATION,
+                    ContractEventType.UPGRADE,
+                ):
+                    # Events work on obligations already saved, so write what is waiting first.
+                    save_obligations(db, waiting, job_id)
+                    waiting = []
+                if version.event_type == ContractEventType.CANCELLATION:
+                    applied, discarded = apply_cancellation(db, version, user_id)
+                    summary.drafts_discarded += discarded
+                    summary.events_applied += int(applied)
+                elif version.event_type == ContractEventType.UPGRADE:
+                    plan, discarded = apply_upgrade(
+                        db,
+                        version,
+                        lines_of[version.id],
+                        rules_of,
+                        deliveries_of,
+                        job_id,
+                        user_id,
+                    )
+                    summary.drafts_discarded += discarded
+                    summary.events_applied += 1
+                    summary.obligations_created += len(plan)
+                    summary.schedule_lines_created += sum(len(p.schedule) for p in plan)
+                else:
+                    plan = _plan_contract(version, lines_of[version.id], rules_of, deliveries_of)
+                    waiting.extend((version.id, planned) for planned in plan)
+                    summary.obligations_created += len(plan)
+                    summary.schedule_lines_created += sum(len(p.schedule) for p in plan)
+                    summary.contracts_generated += 1
+            except SkipContractError as skip:
+                summary.skipped.append(SkippedContract(code, skip.reason, skip.message))
+                blocked.add(code)
+        save_obligations(db, waiting, job_id)
+        db.flush()
+        if commit_every:
+            db.commit()
+        report(int(50 * (first + len(chunk)) / len(versions)))
+    if versions:
+        refresh_statistics(db)  # the steps below read what was just written
 
 
 def versions_to_process(db: Session) -> list[tuple[ContractVersion, str]]:
@@ -202,6 +238,7 @@ def versions_to_process(db: Session) -> list[tuple[ContractVersion, str]]:
     return list(
         db.execute(
             select(ContractVersion, Contract.contract_code)
+            .options(defer(ContractVersion.source_payload))
             .join(Contract, Contract.id == ContractVersion.contract_id)
             .where(
                 (~is_cancellation & no_obligations)
@@ -215,22 +252,41 @@ def versions_to_process(db: Session) -> list[tuple[ContractVersion, str]]:
 def _load_inputs(
     db: Session, version_ids: list[int]
 ) -> tuple[
-    dict[int, list[tuple[ContractLine, Product]]],
+    dict[int, list[tuple[Any, Product]]],
     dict[int, list[SspRuleData]],
     dict[int, list[DeliveryTranche]],
 ]:
-    lines_of: dict[int, list[tuple[ContractLine, Product]]] = defaultdict(list)
+    lines_of: dict[int, list[tuple[Any, Product]]] = defaultdict(list)
     rules_of: dict[int, list[SspRuleData]] = defaultdict(list)
     if not version_ids:
         return lines_of, rules_of, {}
-    for line, product in db.execute(
-        select(ContractLine, Product)
-        .join(Product, Product.id == ContractLine.product_id)
+    # Only the columns the engine reads: the uploaded source_payload is large, and unused here.
+    rows = db.execute(
+        select(
+            ContractLine.id,
+            ContractLine.contract_version_id,
+            ContractLine.line_no,
+            ContractLine.product_id,
+            ContractLine.quantity,
+            ContractLine.net_price,
+            ContractLine.service_start,
+            ContractLine.service_end,
+            ContractLine.completion_date,
+        )
         .where(ContractLine.contract_version_id.in_(version_ids))
         .order_by(ContractLine.contract_version_id, ContractLine.line_no)
-    ).tuples():
-        lines_of[line.contract_version_id].append((line, product))
-    product_ids = {product.id for rows in lines_of.values() for _, product in rows}
+    ).all()
+    product_ids = {row.product_id for row in rows}
+    products = {
+        product.id: product
+        for product in db.scalars(
+            select(Product)
+            .options(defer(Product.source_payload))
+            .where(Product.id.in_(product_ids))
+        )
+    }
+    for row in rows:
+        lines_of[row.contract_version_id].append((row, products[row.product_id]))
     for rule in db.scalars(select(SspRule).where(SspRule.product_id.in_(product_ids))):
         rules_of[rule.product_id].append(
             SspRuleData(
@@ -242,13 +298,12 @@ def _load_inputs(
                 sequence=rule.id,
             )
         )
-    line_ids = [line.id for rows in lines_of.values() for line, _ in rows]
-    return lines_of, rules_of, load_deliveries(db, line_ids)
+    return lines_of, rules_of, load_deliveries(db, [row.id for row in rows])
 
 
 def _plan_contract(
     version: ContractVersion,
-    lines: list[tuple[ContractLine, Product]],
+    lines: list[tuple[Any, Product]],
     rules_of: dict[int, list[SspRuleData]],
     deliveries_of: dict[int, list[DeliveryTranche]],
 ) -> list[PlannedObligation]:
@@ -333,13 +388,16 @@ def _rebuild_for_deliveries(db: Session, summary: RunSummary) -> None:
     if not rows:
         return
     deliveries_of = load_deliveries(db, [po.contract_line_id for po, _, _ in rows])
+    lines_of: dict[int, list[ScheduleLine]] = defaultdict(list)
+    for schedule_line in db.scalars(
+        select(ScheduleLine).where(
+            ScheduleLine.schedule_id.in_([schedule_id for _, schedule_id, _ in rows]),
+            ScheduleLine.status != ScheduleLineStatus.SUPERSEDED,
+        )
+    ):
+        lines_of[schedule_line.schedule_id].append(schedule_line)
     for obligation, schedule_id, code in rows:
-        lines = db.scalars(
-            select(ScheduleLine).where(
-                ScheduleLine.schedule_id == schedule_id,
-                ScheduleLine.status != ScheduleLineStatus.SUPERSEDED,
-            )
-        ).all()
+        lines = lines_of[schedule_id]
         booked: dict[str, int] = defaultdict(int)
         open_lines: dict[str, int] = defaultdict(int)
         for line in lines:

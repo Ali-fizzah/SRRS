@@ -117,7 +117,8 @@ export default function RecognitionRunCard() {
         )}
         {job.data?.status === "FAILED" && (
           <Alert severity="error" sx={{ mt: 2 }}>
-            The run failed and saved nothing: {job.data.error}
+            The run stopped: {job.data.error} Contracts it had finished are saved; run it again to
+            carry on.
           </Alert>
         )}
         {result && (

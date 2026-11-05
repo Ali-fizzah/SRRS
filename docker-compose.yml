@@ -4,6 +4,14 @@
 services:
   postgres:
     image: postgres:16-alpine
+    # Room for bulk loads (task P7-T2): the defaults are for a very small machine.
+    command: >-
+      postgres
+      -c shared_buffers=512MB
+      -c work_mem=32MB
+      -c maintenance_work_mem=256MB
+      -c max_wal_size=4GB
+      -c checkpoint_timeout=15min
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-revrec}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-revrec}

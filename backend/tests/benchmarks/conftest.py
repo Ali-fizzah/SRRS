@@ -29,7 +29,8 @@ def pytest_terminal_summary(terminalreporter: Any) -> None:
     for folder in folders:
         result = RESULTS.get(folder.name)
         if result is None:
-            status = "stub" if case_meta(folder)["status"] == "stub" else "not run"
+            status = case_meta(folder)["status"]
+            status = status if status in ("stub", "manual") else "not run"
             write(f"{folder.name:<34}{status:<9}")
             continue
         write(

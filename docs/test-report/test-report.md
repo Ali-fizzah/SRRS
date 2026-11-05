@@ -1,12 +1,11 @@
 # Revenue recognition system: test report
 
-Date: 2026-11-05 · Code version: `c4313cb-dirty`
+Date: 2026-11-05 · Code version: `883655d-dirty`
 
 **DRAFT: the run passes, but the report cannot be signed yet.**
 
 - 13 case(s) use expected values M1 has not confirmed (drafted by the developers).
 - 3 accounting decision(s) are not signed off.
-- 1 case(s) are not built yet.
 
 ## Result
 
@@ -37,7 +36,7 @@ Pass rule: Every schedule and journal amount within 0.01 of the expected value, 
 | C01_close_and_late_invoice | Close | Developer draft | PASS | 39 | 0.00 | 0 |
 | X01_revrec_model_final | Excel | Workbook | PASS | 80 | 0.01 | 0 |
 | X02_revrec_mock_data | Excel | Workbook | PASS | 557 | 0.01 | 0 |
-| L01_load_50k | Load | - | Not built | | | |
+| L01_load_50k | Load | - | make load | | | |
 | G_bundles_s2 | Generated | Generator | PASS | 1187 | 0.00 | 0 |
 | G_events_s3 | Generated | Generator | PASS | 1859 | 0.00 | 0 |
 | G_full_s4 | Generated | Generator | PASS | 2286 | 0.00 | 0 |
