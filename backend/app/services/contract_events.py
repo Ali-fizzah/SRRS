@@ -225,7 +225,7 @@ def _plan_stop(
     add: list[tuple[str, int]] = []
     for period in sorted(set(desired) | set(posted) | set(pending)):
         target = desired.get(period, 0) - posted.get(period, 0)
-        if target < 0:
+        if target < 0 and posted.get(period, 0) != 0:
             raise SkipContractError(
                 "EVENT_AFTER_POSTING",
                 f"The event takes effect on {as_of + timedelta(days=1)}, but revenue for "

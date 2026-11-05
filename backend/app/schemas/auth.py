@@ -4,7 +4,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, Field
 
-from app.auth.passwords import MAX_PASSWORD_BYTES
+from app.auth.passwords import MAX_PASSWORD_BYTES, password_problem
 from app.auth.roles import Role
 
 _EMAIL_SHAPE = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
@@ -13,12 +13,14 @@ _EMAIL_SHAPE = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 def _check_password(value: str) -> str:
     if len(value.encode()) > MAX_PASSWORD_BYTES:
         raise ValueError(f"must be at most {MAX_PASSWORD_BYTES} bytes")
+    problem = password_problem(value)
+    if problem:
+        raise ValueError(problem)
     return value
 
 
 Email = Annotated[str, Field(pattern=_EMAIL_SHAPE, max_length=320), AfterValidator(str.lower)]
-# Minimum length only for now; the full password policy is task P6-T5.
-NewPassword = Annotated[str, Field(min_length=8), AfterValidator(_check_password)]
+NewPassword = Annotated[str, AfterValidator(_check_password)]
 
 
 class LoginRequest(BaseModel):

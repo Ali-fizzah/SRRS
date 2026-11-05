@@ -24,7 +24,7 @@ def test_create_user_writes_audit_without_password(client: TestClient, db: Sessi
         json={
             "email": "New.Person@Test.local",
             "full_name": "New Person",
-            "password": "long-enough-1",
+            "password": "Long-Enough-123",
             "roles": ["UPLOADER", "ACCOUNTANT"],
         },
     )
@@ -50,7 +50,7 @@ def test_duplicate_email_is_refused(client: TestClient, db: Session) -> None:
         json={
             "email": "taken@test.local",
             "full_name": "Again",
-            "password": "long-enough-1",
+            "password": "Long-Enough-123",
             "roles": ["UPLOADER"],
         },
     )

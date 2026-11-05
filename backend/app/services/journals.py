@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import Select, delete, exists, func, select, update
+from sqlalchemy import Select, delete, exists, func, select, text, update
 from sqlalchemy.orm import Session, aliased
 
 from app.audit import write_audit
@@ -802,6 +802,9 @@ def _save_batch(
     ]
     if links:
         db.execute(update(ScheduleLine), links)
+    # A big batch changes these tables at once, and posting follows. Without fresh statistics
+    # PostgreSQL can pick a plan that takes minutes instead of milliseconds (found by P6-T3).
+    db.execute(text("ANALYZE journal_entries, journal_lines, schedule_lines"))
     summary.batch_id = batch.id
     summary.batch_no = batch.batch_no
     summary.entries = len(rows)

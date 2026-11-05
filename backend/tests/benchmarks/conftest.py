@@ -39,6 +39,15 @@ def pytest_terminal_summary(terminalreporter: Any) -> None:
         for problem in result.problems[:5]:
             write(f"    {problem}")
 
+    for name, result in RESULTS.items():  # generated datasets have no folder here (P6-T1)
+        if not (CASES / name).is_dir():
+            write(
+                f"{name:<34}{'PASS' if result.passed else 'FAIL':<9}{result.compared:>9}"
+                f"{result.max_variance:>14}{len(result.failures):>11}"
+            )
+            for problem in result.problems[:5]:
+                write(f"    {problem}")
+
     if RESULTS:
         REPORT.parent.mkdir(parents=True, exist_ok=True)
         with REPORT.open("w", newline="", encoding="utf-8") as f:
@@ -61,6 +70,22 @@ def pytest_terminal_summary(terminalreporter: Any) -> None:
                             "FAIL" if over else "pass",
                         ]
                     )
+        with REPORT.with_name("cases.csv").open("w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f, lineterminator="\n")
+            writer.writerow(
+                ["case", "result", "compared", "max_variance", "over_tolerance", "problems"]
+            )
+            for name, result in RESULTS.items():
+                writer.writerow(
+                    [
+                        name,
+                        "PASS" if result.passed else "FAIL",
+                        result.compared,
+                        result.max_variance,
+                        len(result.failures),
+                        len(result.problems),
+                    ]
+                )
         write(f"Variance report: {REPORT}")
 
 

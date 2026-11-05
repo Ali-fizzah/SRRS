@@ -1,5 +1,6 @@
 """P4-T1, P4-T3, P4-T4: contract events, journal generation, lifecycle, reversal (plan §5.5-5.7)."""
 
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
@@ -14,14 +15,17 @@ from app.models import (
     AuditLog,
     Contract,
     ContractVersion,
+    CreditNote,
     GlAccount,
     GlMapping,
+    Invoice,
     JournalBatch,
     JournalEntry,
     JournalLine,
     PerformanceObligation,
     RevenueSchedule,
     ScheduleLine,
+    ValidationError,
 )
 from app.models.enums import (
     AccountRole,
@@ -477,14 +481,56 @@ def test_missing_mapping_is_reported_and_books_nothing(db: Session, user_id: int
     assert "DEFERRED_REVENUE" in summary.skipped[0].message
 
 
-def test_credit_processed_before_its_invoice_is_reported_not_booked(
+def test_credit_before_its_invoice_in_section_5_6_order_is_refused_at_upload(
     db: Session, user_id: int
 ) -> None:
-    """§5.6 orders by date then number, so on the same date "A-CN" comes before "B-INV"."""
+    """§5.6 orders by date then number, so on the same date "A-CN" comes before "B-INV". Found by
+    P6-T3: upload used to accept this, and then the month could never close."""
     new_contract(
         db, user_id, "K", f"1,SUB,1,1200.00,,{YEAR},", invoices="B-INV,K,2025-01-05,1,500.00"
     )
-    accepted(upload(db, user_id, credit_notes="A-CN,B-INV,2025-01-05,100.00,Fix"))
+    summaries = upload(db, user_id, credit_notes="A-CN,B-INV,2025-01-05,100.00,Fix")
+    assert summaries[0].rejected_rows == 1
+    code = db.scalar(select(ValidationError.error_code).order_by(ValidationError.id.desc()))
+    assert code == "E009"
+    accepted(upload(db, user_id, credit_notes="Z-CN,B-INV,2025-01-05,100.00,Fix"))  # after it
+
+
+def test_credit_dated_before_a_later_invoice_in_the_month_is_refused(
+    db: Session, user_id: int
+) -> None:
+    """An invoice dated later cannot pay for a credit processed first (§5.6)."""
+    new_contract(
+        db,
+        user_id,
+        "K",
+        f"1,SUB,1,1200.00,,{YEAR},",
+        invoices="I1,K,2025-01-05,1,100.00\nI2,K,2025-01-25,1,500.00",
+    )
+    summaries = upload(db, user_id, credit_notes="C1,I2,2025-01-25,600.00,Over")
+    assert (
+        summaries[0].rejected_rows == 1
+    )  # 600 is all that was billed, but I2 is taken by C1's date
+    accepted(upload(db, user_id, credit_notes="C2,I1,2025-01-10,100.00,Fine"))
+
+
+def test_journal_generation_still_refuses_an_uncovered_credit(db: Session, user_id: int) -> None:
+    """A last line of defence: data that did not come through upload must not break the books."""
+    new_contract(
+        db, user_id, "K", f"1,SUB,1,1200.00,,{YEAR},", invoices="B-INV,K,2025-01-05,1,500.00"
+    )
+    invoice_id = db.scalar(select(Invoice.id))
+    assert invoice_id is not None
+    db.add(
+        CreditNote(
+            credit_note_number="A-CN",
+            invoice_id=invoice_id,
+            credit_date=date(2025, 1, 5),
+            amount=D("100.00"),
+            reason="Direct",
+        )
+    )
+    db.flush()
     run_recognition(db, user_id)
     summary = generate_journals(db, "202501", user_id)
     assert [s.reason for s in summary.skipped] == ["CREDIT_EXCEEDS_DEFERRED"]
@@ -741,3 +787,43 @@ def test_cancelled_contract_shows_as_done_only_after_the_run(
     run_recognition(db, user_id)
     item = client.get("/api/v1/contracts").json()["items"][0]
     assert item["has_schedule"] is True and item["status"] == "CANCELLED"
+
+
+# --------------------------------------------------------------------------- found by P6-T1
+
+
+def test_deliveries_that_round_past_the_allocation_leave_a_negative_remainder(
+    db: Session, user_id: int, approver_id: int
+) -> None:
+    """A = 5.01 delivered 50% + 50%: 2.51 + 2.51 = 5.02, so §5.3's remainder is -0.01 in the
+    completion month. Found by P6-T1: this used to be refused, and the deliveries ignored."""
+    cid = new_contract(db, user_id, "K", "1,PRINT,1,5.01,,2025-01-01,2025-06-30,2025-06-30")
+    run_recognition(db, user_id)  # the schedule exists before the deliveries arrive
+    accepted(upload(db, user_id, deliveries="D1,K,1,2025-01-10,0.5\nD2,K,1,2025-01-20,0.5"))
+    summary = run_recognition(db, user_id)
+    assert summary.skipped == [] and summary.schedules_rebuilt == 1
+    assert live_schedule(db, cid) == {"202501": D("5.02"), "202506": D("-0.01")}
+    assert sum(live_schedule(db, cid).values()) == D("5.01")  # still exactly the allocation
+
+    book_month(db, user_id, approver_id, "202501")
+    for _ in range(5):
+        next_month(db)
+    book_month(db, user_id, approver_id, "202506")
+    # A negative month runs the other way: Dr revenue, and the position goes back up.
+    assert ("4200", D("0.01"), D(0)) in entry_lines(db, "REVENUE")
+    # Never invoiced, so all 5.01 of revenue is unbilled; the GL holds the same (the replay checks).
+    assert balance_at(contract_balances(db, cid), "202506") == (0, 501)
+
+
+def test_late_deliveries_still_refuse_when_booked_revenue_would_change(
+    db: Session, user_id: int, approver_id: int
+) -> None:
+    """The refusal the fix must keep: the completion month is already posted."""
+    next_month(db)
+    new_contract(db, user_id, "K", "1,PRINT,1,500.00,,2025-01-01,2025-01-31,2025-01-31")
+    book_month(db, user_id, approver_id, "202502")
+    next_month(db)
+    accepted(upload(db, user_id, deliveries="D1,K,1,2025-01-10,0.5"))
+    summary = run_recognition(db, user_id)
+    assert summary.schedules_rebuilt == 0
+    assert summary.skipped == []  # the delivery is inside the month already booked: no change

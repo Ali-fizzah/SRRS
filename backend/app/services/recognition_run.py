@@ -362,8 +362,10 @@ def _rebuild_for_deliveries(db: Session, summary: RunSummary) -> None:
         target = {period: amount for period, amount in target.items() if amount != 0}
         if target == {period: amt for period, amt in open_lines.items() if amt != 0}:
             continue
-        if any(amount < 0 for amount in target.values()):
-            # The plan does not define reversing revenue already booked for a late delivery.
+        if any(amount < 0 and booked[period] != 0 for period, amount in target.items()):
+            # The plan does not define reversing revenue already booked for a late delivery. A
+            # negative month with nothing booked is fine: tranches round half up, so 50% + 50% of
+            # an odd amount leaves a remainder of -0.01 in the completion month (§5.3, D3).
             summary.skipped.append(
                 SkippedContract(
                     code,

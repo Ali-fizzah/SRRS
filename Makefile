@@ -13,7 +13,7 @@ endif
 
 N ?= 50000
 
-.PHONY: dev down migrate seed test lint bench convert erd load demo-reset
+.PHONY: dev down migrate seed test lint bench stress report convert erd load demo-reset
 
 dev:
 	# -V: renew the web container's node_modules volume, or new npm packages stay invisible.
@@ -40,6 +40,17 @@ lint:
 
 bench:
 	$(BACKEND) pytest tests/benchmarks -q
+
+# Hunt for bugs with generated datasets, more than `make bench` can afford (task P6-T3).
+S ?= 5
+LINES ?= 300
+stress:
+	$(BACKEND) env REVREC_STRESS=$(S):$(LINES) pytest tests/benchmarks/test_generated_datasets.py -q -k stress
+
+# Run the benchmarks, then write docs/test-report/test-report.md and .pdf (task P6-T4).
+report:
+	-$(BACKEND) pytest tests/benchmarks -q
+	$(BACKEND) python ../tools/test_report.py --repo .. --commit $(shell git describe --always --dirty)
 
 # Regenerate the Excel benchmark cases X01/X02 from benchmarks/source (plan §11.4).
 convert:

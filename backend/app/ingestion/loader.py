@@ -30,6 +30,7 @@ from app.ingestion.parser import CellError, FileRejectedError, ParsedRow, parse_
 from app.ingestion.templates import TEMPLATES
 from app.ingestion.validators import (
     ContractInfo,
+    DocumentOrder,
     ExistingData,
     InvoiceInfo,
     LineInfo,
@@ -48,6 +49,7 @@ from app.models import (
     GlAccount,
     Invoice,
     InvoiceLine,
+    JournalEntry,
     Product,
     SspRule,
     UploadFile,
@@ -56,12 +58,14 @@ from app.models import (
 from app.models.enums import (
     ContractEventType,
     ContractStatus,
+    JournalEntryType,
     PeriodStatus,
     RecognitionMethod,
     UploadStatus,
     UploadTemplate,
 )
 from app.services.billing import contract_position_cents
+from app.services.journals import document_posting_period
 
 CENT = Decimal("0.01")
 # A blank ssp_valid_from: the product's first SSP applies from the beginning.
@@ -387,6 +391,9 @@ def _existing(
         ),
         delivered=dict(delivered),
         positions=_positions(db, contract_codes) if tpl.CREDIT_NOTES in parsed else {},
+        pending_documents=(
+            _pending_documents(db, contract_codes, current) if tpl.CREDIT_NOTES in parsed else {}
+        ),
     )
 
 
@@ -400,6 +407,59 @@ def _positions(db: Session, contract_codes: set[str]) -> dict[str, Decimal]:
             )
         ).tuples()
     }
+
+
+def _pending_documents(
+    db: Session, contract_codes: set[str], current: str | None
+) -> dict[str, list[tuple[DocumentOrder, Decimal]]]:
+    """Invoices (+) and credit notes (-) no journal holds yet, in the order journals will take
+    them (§5.6). Documents already in a journal are behind the balance, so they never move."""
+    out: dict[str, list[tuple[DocumentOrder, Decimal]]] = defaultdict(list)
+    if not contract_codes:
+        return out
+
+    def order(when: date, number: str, upload_period: str | None) -> DocumentOrder:
+        return (
+            document_posting_period(when, max(upload_period or "", current or "")),
+            when,
+            number,
+        )
+
+    in_journal = select(JournalEntry.source_id).where(
+        JournalEntry.entry_type == JournalEntryType.INVOICE
+    )
+    for code, number, when, amount, period in db.execute(
+        select(
+            Contract.contract_code,
+            Invoice.invoice_number,
+            Invoice.invoice_date,
+            Invoice.total_amount,
+            UploadFile.period_key,
+        )
+        .join(Invoice, Invoice.contract_id == Contract.id)
+        .outerjoin(UploadFile, UploadFile.id == Invoice.source_upload_id)
+        .where(Contract.contract_code.in_(contract_codes), Invoice.id.not_in(in_journal))
+    ).tuples():
+        out[code].append((order(when, number, period), amount))
+
+    credit_in_journal = select(JournalEntry.source_id).where(
+        JournalEntry.entry_type == JournalEntryType.CREDIT_NOTE
+    )
+    for code, number, when, amount, period in db.execute(
+        select(
+            Contract.contract_code,
+            CreditNote.credit_note_number,
+            CreditNote.credit_date,
+            CreditNote.amount,
+            UploadFile.period_key,
+        )
+        .join(Invoice, Invoice.contract_id == Contract.id)
+        .join(CreditNote, CreditNote.invoice_id == Invoice.id)
+        .outerjoin(UploadFile, UploadFile.id == CreditNote.source_upload_id)
+        .where(Contract.contract_code.in_(contract_codes), CreditNote.id.not_in(credit_in_journal))
+    ).tuples():
+        out[code].append((order(when, number, period), -amount))
+    return out
 
 
 def _line_products(db: Session, contract_codes: set[str]) -> set[str]:

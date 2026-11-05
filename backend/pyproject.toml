@@ -31,6 +31,7 @@ dev = [
     "hypothesis==6.170.14",
     "ruff==0.17.3",
     "mypy==2.4.1",
+    "fpdf2==2.8.9",
     "pandas-stubs==3.1.0.261029",
     "types-pyyaml==6.0.12.20261030",
 ]

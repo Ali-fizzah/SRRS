@@ -46,6 +46,9 @@ class ContractInfo:
     cancelled: bool = False
 
 
+DocumentOrder = tuple[str, date, str]  # posting period, document date, number
+
+
 @dataclass(frozen=True)
 class InvoiceInfo:
     contract_code: str
@@ -66,6 +69,10 @@ class ExistingData:
     invoices: Mapping[str, InvoiceInfo] = field(default_factory=dict)
     # Per contract, billed minus recognised: positive is the deferred balance (§5.6).
     positions: Mapping[str, Decimal] = field(default_factory=dict)
+    # Per contract, invoices (+) and credit notes (-) that no journal holds yet (§5.6 order).
+    pending_documents: Mapping[str, list[tuple["DocumentOrder", Decimal]]] = field(
+        default_factory=dict
+    )
     credit_notes: frozenset[str] = frozenset()
     deliveries: frozenset[str] = frozenset()
     delivered: Mapping[tuple[str, int], Decimal] = field(default_factory=dict)  # Σ units_fraction
@@ -591,11 +598,21 @@ def _credit_notes(rows: list[Row], known: _Known) -> None:
         "credit_note_number",
     )
     remaining = {n: i.total - i.credited for n, i in known.invoices.items()}
-    positions = dict(known.existing.positions)
+    # §5.6: journals process a period's documents by date then number, so a credit is checked
+    # against the balance at that point, not against invoices that come after it.
+    documents: dict[str, list[tuple[DocumentOrder, Decimal]]] = defaultdict(list)
+    for code, pending in known.existing.pending_documents.items():
+        documents[code].extend(pending)
+    starting = {
+        code: position - sum((signed for _, signed in documents.get(code, [])), Decimal(0))
+        for code, position in known.existing.positions.items()
+    }
     for invoice_number, info in known.invoices.items():  # earlier in this upload count too
         if invoice_number not in known.existing.invoices:
             code = info.contract_code
-            positions[code] = positions.get(code, Decimal(0)) + info.total
+            order = _document_order(known, info.invoice_date, invoice_number)
+            documents[code].append((order, info.total))
+            starting.setdefault(code, Decimal(0))
     for row in rows:
         number = row.values.get("credit_note_number")
         if number in known.existing.credit_notes:
@@ -624,20 +641,45 @@ def _credit_notes(rows: list[Row], known: _Known) -> None:
                     f"({remaining[invoice_no]}).",
                 )
                 continue
-            position = positions.get(invoice.contract_code)
-            if position is not None and row.values["amount"] > position:
-                deferred = max(position, Decimal(0))
-                row.fail(
-                    "E009",
-                    "amount",
-                    f"The credit is more than the deferred revenue of contract "
-                    f"{invoice.contract_code} ({deferred}); reversing recognised revenue is out "
-                    "of scope (plan §5.6).",
+            code = invoice.contract_code
+            if code in starting and row.has("credit_date"):
+                entry = (
+                    _document_order(known, row.values["credit_date"], number or ""),
+                    -row.values["amount"],
                 )
-                continue
+                shortfall = _balance_before_failing_credit(
+                    starting[code], [*documents[code], entry]
+                )
+                if shortfall is not None:
+                    row.fail(
+                        "E009",
+                        "amount",
+                        f"The credit is more than the deferred revenue of contract {code} when "
+                        f"journals process it, by date then number ({shortfall}); reversing "
+                        "recognised revenue is out of scope (plan §5.6).",
+                    )
+                    continue
+                documents[code].append(entry)
             remaining[invoice_no] -= row.values["amount"]
-            if position is not None:
-                positions[invoice.contract_code] = position - row.values["amount"]
+
+
+def _document_order(known: _Known, when: date, number: str) -> "DocumentOrder":
+    """D6 and §5.6: a document posts in its own month or the current one, whichever is later."""
+    period = f"{when.year:04d}{when.month:02d}"
+    return (max(period, known.existing.current_period), when, number)
+
+
+def _balance_before_failing_credit(
+    start: Decimal, documents: list[tuple["DocumentOrder", Decimal]]
+) -> Decimal | None:
+    """Walk the documents in §5.6 order. The deferred balance at the first credit it cannot cover,
+    or None if every credit is covered."""
+    position = start
+    for _, signed in sorted(documents, key=lambda item: item[0]):
+        if signed < 0 and -signed > position:
+            return max(position, Decimal(0))
+        position += signed
+    return None
 
 
 # --------------------------------------------------------------------------- deliveries

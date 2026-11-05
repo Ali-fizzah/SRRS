@@ -16,6 +16,7 @@ from sqlalchemy import Connection, Engine, create_engine, select, text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.auth.rate_limit import login_limiter
 from app.auth.roles import Role
 from app.auth.tokens import create_access_token
 from app.config import get_settings
@@ -87,6 +88,7 @@ def db(conn: Connection) -> Iterator[Session]:
 @pytest.fixture
 def client(db: Session) -> Iterator[TestClient]:
     """API client whose requests use the test transaction."""
+    login_limiter.reset()
     app.dependency_overrides[get_db] = lambda: db
     try:
         yield TestClient(app)

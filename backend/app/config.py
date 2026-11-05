@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     upload_dir: str = "storage/uploads"
     max_upload_bytes: int = 50 * 1024 * 1024  # per file
     worker_poll_seconds: float = 1.0
+    # P6-T5: wrong passwords per email before a pause.
+    login_max_failures: int = 5
+    login_lock_seconds: int = 300
     # D13: the user who generated a journal batch cannot approve it.
     segregation_of_duties: bool = True
 
