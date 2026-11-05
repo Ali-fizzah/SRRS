@@ -1,0 +1,7 @@
+product_id,name,category,list_price,ssp_source,ssp_value,ssp_pct,recognition_method,separate_obligation,revenue_gl_account,ssp_valid_from
+SUB-ANNUAL,Annual subscription,Subscription,12000.00,LIST_PRICE,,,RATABLE_MONTHLY,Y,4100,2026-01-01
+PRINT-RUN,Printed edition,Print,1500.00,LIST_PRICE,,,POINT_IN_TIME,Y,4200,2026-01-01
+SUB-STD,Standard subscription,Subscription,1200.00,LIST_PRICE,,,RATABLE_MONTHLY,Y,4100,2026-01-01
+SUB-DAILY,Daily-rated subscription,Subscription,3650.00,LIST_PRICE,,,RATABLE_DAILY,Y,4100,2026-01-01
+SUPPORT,Premium support,Services,1000.00,LIST_PRICE,,,RATABLE_DAILY,Y,4300,2026-01-01
+SETUP-FEE,Onboarding setup fee,Services,500.00,LIST_PRICE,,,POINT_IN_TIME,N,4300,2026-01-01

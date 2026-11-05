@@ -78,6 +78,8 @@ make lint LOCAL=1
 
 Other documents: [user manual](docs/user-manual.md), [performance results](docs/performance.md), [validation log](docs/validation-log.md), [security pass](docs/security-pass.md), [test report](docs/test-report/test-report.md).
 
+[docs/demo-viva.md](docs/demo-viva.md) is the full viva demo; `make demo-viva CONFIRM=yes` **deletes all data in the development database** and sets it up. The release steps are in [docs/release/release-checklist.md](docs/release/release-checklist.md), and `make release-archive` archives the schema.
+
 [docs/demo-fyp1.md](docs/demo-fyp1.md) is the scripted FYP-I walkthrough, with its dataset and
 screenshots. `make demo-reset CONFIRM=yes` **deletes all data in the development database** and
 seeds it again, ready to present.

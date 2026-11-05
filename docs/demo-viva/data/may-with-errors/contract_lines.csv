@@ -1,0 +1,4 @@
+contract_id,line_no,product_id,quantity,unit_price,discount,service_start,service_end,completion_date
+V-1005,1,SUB-STD,5,1200.00,600.00,2027-05-01,2028-04-30,
+V-2001,1,SUB-STD,1,1200.00,,2027-01-15,2027-12-31,
+V-2002,1,SUB-STD,1,1200.00,,2027-01-01,2027-12-31,

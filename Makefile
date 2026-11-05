@@ -13,7 +13,7 @@ endif
 
 N ?= 50000
 
-.PHONY: dev down migrate seed test lint bench stress report convert erd load demo-reset
+.PHONY: dev down migrate seed test lint bench stress report convert erd load demo-reset demo-viva release-archive
 
 # -V: renew the web container's node_modules volume, or new npm packages stay invisible.
 dev:
@@ -71,6 +71,28 @@ endif
 	docker compose run --rm api alembic upgrade head
 	docker compose run --rm -e REVREC_CURRENT_PERIOD=202612 api python ../tools/seed.py
 	docker compose restart worker
+
+# Clean database for the viva (docs/demo-viva.md), with May 2027 open and its three users.
+# DELETES ALL DATA in the dev database.
+demo-viva:
+ifneq ($(CONFIRM),yes)
+	$(error This deletes all data in the dev database. Run: make demo-viva CONFIRM=yes)
+endif
+	docker compose exec -T postgres dropdb -U revrec --force revrec
+	docker compose exec -T postgres createdb -U revrec revrec
+	docker compose run --rm api alembic upgrade head
+	docker compose run --rm -e REVREC_CURRENT_PERIOD=202705 api python ../tools/seed.py
+	docker compose run --rm api python ../tools/seed_demo_users.py
+	docker compose restart api worker
+
+# Archive the schema, from a throwaway database at the latest migration, and the ERD (task P8-T1).
+release-archive:
+	docker compose exec -T postgres dropdb -U revrec --force --if-exists revrec_schema
+	docker compose exec -T postgres createdb -U revrec revrec_schema
+	docker compose run --rm -e REVREC_DATABASE_URL=postgresql+psycopg://revrec:revrec@postgres:5432/revrec_schema api alembic upgrade head
+	docker compose exec -T postgres pg_dump -U revrec --schema-only --no-owner --no-privileges revrec_schema > docs/release/schema.sql
+	docker compose exec -T postgres dropdb -U revrec --force revrec_schema
+	docker compose run --rm api python ../tools/gen_erd.py ../docs/erd.md
 
 load:
 	$(BACKEND) python ../tools/load_test.py --lines $(N)
