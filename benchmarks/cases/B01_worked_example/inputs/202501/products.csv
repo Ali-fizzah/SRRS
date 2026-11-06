@@ -1,0 +1,3 @@
+product_id,name,category,list_price,ssp_source,ssp_value,ssp_pct,recognition_method,separate_obligation,revenue_gl_account,ssp_valid_from
+SUBSCRIPTION,SUBSCRIPTION,,12000.00,LIST_PRICE,,,RATABLE_MONTHLY,Y,4100,2024-01-01
+TRAINING,TRAINING,,1500.00,LIST_PRICE,,,POINT_IN_TIME,Y,4300,2024-01-01

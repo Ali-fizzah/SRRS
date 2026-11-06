@@ -1,0 +1,6 @@
+# Keep LF line endings in the repo (Docker/CI run on Linux; benchmark CSVs stay byte-stable).
+* text=auto eol=lf
+
+*.xlsx binary
+*.png binary
+*.pdf binary

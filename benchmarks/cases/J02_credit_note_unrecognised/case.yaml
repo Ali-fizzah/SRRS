@@ -1,0 +1,20 @@
+# Benchmark case (plan §11.2-11.3). Expected values are owned by M1.
+# Never edit expected/ to make a test pass;
+# record confirmed benchmark fixes under notes.
+id: J02
+level: Journals
+description: Credit note on unrecognised portion
+key_expected: Dr Deferred / Cr AR
+owner: M1
+source: plan §5.5-5.7 and §11.3; computed with exact fractions, independently of the
+  engine
+open_period: '202501'
+periods:
+  from: '202501'
+  to: '202512'
+tolerance: '0.01'
+status: ready
+notes:
+- 'DRAFT by the developers: M1 must confirm these expected values (plan §11.3, P4-T6).'
+- Revenue keeps running after the credit, so the contract ends 300.00 unbilled; the
+  plan has no rule linking a credit note to the schedule unless the contract is cancelled.

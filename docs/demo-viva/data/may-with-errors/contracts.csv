@@ -1,0 +1,4 @@
+contract_id,customer_id,start_date,end_date,event_type,effective_date
+V-1005,CUST-0001,2027-05-01,2028-04-30,NEW,2027-05-01
+V-2001,CUST-0002,2027-01-01,2027-12-31,NEW,2027-01-01
+V-2002,CUST-9999,2027-01-01,2027-12-31,NEW,2027-01-01

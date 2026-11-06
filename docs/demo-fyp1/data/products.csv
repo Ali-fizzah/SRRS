@@ -1,0 +1,5 @@
+product_id,name,category,list_price,ssp_source,ssp_value,ssp_pct,recognition_method,separate_obligation,revenue_gl_account,ssp_valid_from
+SUB-STD-12M,Standard subscription (12 months),Subscription,1200.00,LIST_PRICE,,,RATABLE_MONTHLY,Y,4100,2025-01-01
+SUB-PRO-12M,Pro subscription (12 months),Subscription,11200.00,LIST_PRICE,,,RATABLE_MONTHLY,Y,4100,2025-01-01
+SUB-ENT-24M,Enterprise subscription (24 months),Subscription,24000.00,FIXED,24000.00,,RATABLE_MONTHLY,Y,4100,2025-01-01
+SETUP-FEE,Onboarding setup fee,Services,500.00,LIST_PRICE,,,POINT_IN_TIME,N,4300,2025-01-01

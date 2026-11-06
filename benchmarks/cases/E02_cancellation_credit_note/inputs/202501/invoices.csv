@@ -1,0 +1,2 @@
+invoice_number,contract_id,invoice_date,line_no,amount
+INV-E02,E02,2025-01-01,1,1200.00

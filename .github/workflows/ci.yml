@@ -1,0 +1,79 @@
+# CI (plan §11.1, task P0-T2): lint, type-check, tests and benchmarks on every PR.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: revrec
+          POSTGRES_PASSWORD: revrec
+          POSTGRES_DB: revrec
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U revrec -d revrec"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      REVREC_DATABASE_URL: postgresql+psycopg://revrec:revrec@localhost:5432/revrec
+      REVREC_JWT_SECRET: ci-only-jwt-secret-at-least-32-characters
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Ruff lint
+        run: ruff check . ../benchmarks/tools ../tools
+      - name: Ruff format
+        run: ruff format --check . ../benchmarks/tools ../tools
+      - name: Mypy
+        run: mypy
+      - name: Migrations
+        run: alembic upgrade head
+      - name: Unit + integration tests
+        run: pytest tests/unit tests/integration -q
+      - name: Benchmarks
+        run: pytest tests/benchmarks -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: ESLint
+        run: npm run lint
+      - name: Prettier
+        run: npm run format:check
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build

@@ -1,0 +1,21 @@
+# Benchmark case (plan §11.2-11.3). Expected values are owned by M1.
+# Never edit expected/ to make a test pass;
+# record confirmed benchmark fixes under notes.
+id: E03
+level: Events
+description: Upgrade in month 7
+key_expected: prospective reallocation (D8)
+owner: M1
+source: plan §5.5-5.7 and §11.3; computed with exact fractions, independently of the
+  engine
+open_period: '202501'
+periods:
+  from: '202501'
+  to: '202512'
+tolerance: '0.01'
+status: ready
+notes:
+- 'DRAFT by the developers: M1 must confirm these expected values (plan §11.3, P4-T6).'
+- 'D8 is not signed off: the SSP basis of line 1 is rounded to cents before it is
+  used.'
+- Line 2 is satisfied before the upgrade, so it is excluded from reallocation (D8).

@@ -1,0 +1,2 @@
+product_id,name,category,list_price,ssp_source,ssp_value,ssp_pct,recognition_method,separate_obligation,revenue_gl_account,ssp_valid_from
+DAILY,DAILY,,1000.00,LIST_PRICE,,,RATABLE_DAILY,Y,4100,2024-01-01

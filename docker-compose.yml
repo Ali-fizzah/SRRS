@@ -1,0 +1,78 @@
+# Local dev environment (plan §3, §4): postgres, api, worker, web.
+# Start everything with `make dev`.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    # Room for bulk loads (task P7-T2): the defaults are for a very small machine.
+    command: >-
+      postgres
+      -c shared_buffers=512MB
+      -c work_mem=32MB
+      -c maintenance_work_mem=256MB
+      -c max_wal_size=4GB
+      -c checkpoint_timeout=15min
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-revrec}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-revrec}
+      POSTGRES_DB: ${POSTGRES_DB:-revrec}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-revrec} -d ${POSTGRES_DB:-revrec}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment: &backend-env
+      REVREC_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-revrec}:${POSTGRES_PASSWORD:-revrec}@postgres:5432/${POSTGRES_DB:-revrec}
+      REVREC_JWT_SECRET: ${REVREC_JWT_SECRET:-dev-only-insecure-jwt-secret-change-me-0001}
+      REVREC_UPLOAD_DIR: /app/storage/uploads
+      REVREC_ADMIN_EMAIL: ${REVREC_ADMIN_EMAIL:-admin@revrec.local}
+      REVREC_ADMIN_PASSWORD: ${REVREC_ADMIN_PASSWORD:-ChangeMe-Admin1}
+      REVREC_CURRENT_PERIOD: ${REVREC_CURRENT_PERIOD:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./benchmarks:/benchmarks
+      - ./tools:/tools
+      - ./docs:/docs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build: ./backend
+    command: python -m app.jobs.worker
+    environment: *backend-env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build: ./frontend
+    # On Windows/macOS hosts, file-change events do not reach the container through the
+    # bind mount, so the dev server must poll. Turbopack cannot, so Docker uses webpack.
+    command: npm run dev:docker
+    environment:
+      API_URL: http://api:8000
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

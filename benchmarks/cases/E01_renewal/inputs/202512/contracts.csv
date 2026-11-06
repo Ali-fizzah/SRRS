@@ -1,0 +1,2 @@
+contract_id,customer_id,start_date,end_date,event_type,effective_date
+E01,CUST-E01,2026-01-01,2026-12-31,RENEWAL,2026-01-01
